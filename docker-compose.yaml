@@ -1,0 +1,46 @@
+version: '3'
+services:
+  bot:
+    restart: always
+    build: .
+    platform: linux/x86_64
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+    environment:
+      DEBUG: ${DEBUG}
+      TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
+      CHROME_HEADLESS: 1
+
+  mongodb:
+    image: mongo:latest
+    restart: always
+    environment:
+      - MONGO_DATA_DIR=/data/db
+      - MONGO_LOG_DIR=/dev/null
+    volumes:
+      - .docker/data/mongodb:/data/db
+    command: mongod
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+
+  mongo-express:
+    image: mongo-express
+    restart: always
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongodb
+      - ME_CONFIG_MONGODB_PORT=27017
+      - ME_CONFIG_MONGODB_ENABLE_ADMIN=true
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=${MONGO_EXPRESS_PASSWORD}
+    depends_on:
+      - mongodb
+    ports:
+      - "12328:8081"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
