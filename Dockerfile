@@ -1,13 +1,22 @@
-FROM golang:latest as build
+# Базовый образ
+FROM golang:1.16-alpine
 
-WORKDIR /src
+# Установка зависимостей для chromedp
+RUN apk add --no-cache chromium \
+    && apk add --no-cache xvfb \
+    && apk add --no-cache wait4ports
+
+# Установка зависимостей приложения
+WORKDIR /go/src/app
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Копирование исходных файлов
 COPY . .
-RUN go build -ldflags "-s -w" -o /librus
 
-FROM chromedp/headless-shell:latest
-RUN apt-get update; apt install tini -y
-ENTRYPOINT ["tini", "--"]
-COPY --from=build /librus /librus
+# Сборка приложения
+RUN go build -o /app
 ENV TELEGRAM_TOKEN=token
 ENV MONGO_HOST=mongodb
-CMD ["/librus"]
+# Определение точки входа
+CMD ["dumb-init", "/app"]
