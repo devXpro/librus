@@ -21,17 +21,14 @@ type Message struct {
 }
 
 func Login(login string, password string) (context.Context, context.CancelFunc, error) {
-	headless := true
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 
 	options := []chromedp.ExecAllocatorOption{
 		chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 Edge/17.17134"),
 		chromedp.WindowSize(1920, 1080),
-	}
-
-	if headless {
-		options = append(options, chromedp.Headless)
+		chromedp.Flag("disable-gpu", true),
+		chromedp.Flag("headless", true),
 	}
 
 	actx, _ := chromedp.NewExecAllocator(ctx, options...)

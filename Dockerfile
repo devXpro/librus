@@ -1,22 +1,26 @@
-# Базовый образ
-FROM golang:1.16-alpine
+# Сборка приложения
+FROM golang:1.17 as builder
 
-# Установка зависимостей для chromedp
-RUN apk add --no-cache chromium \
-    && apk add --no-cache xvfb \
-    && apk add --no-cache wait4ports
+WORKDIR /app
 
-# Установка зависимостей приложения
-WORKDIR /go/src/app
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Копирование исходных файлов
 COPY . .
 
-# Сборка приложения
-RUN go build -o /app
+RUN go build -o main .
+
+# Запуск приложения
+FROM zenika/alpine-chrome
+
+WORKDIR /app
+
+# Установка необходимых зависимостей
+RUN apk add --no-cache ca-certificates
+
+# Копирование собранного приложения из предыдущей стадии
+COPY --from=builder /app/main /app/main
 ENV TELEGRAM_TOKEN=token
 ENV MONGO_HOST=mongodb
-# Определение точки входа
-CMD ["dumb-init", "/app"]
+# Запуск приложения
+CMD ["./main"]
