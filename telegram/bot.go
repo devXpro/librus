@@ -121,7 +121,6 @@ func Start() {
 	}
 	go checkNewMessagesPeriodically(bot)
 
-	bot.Debug = helper.IsDebug()
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 3
 	updates := bot.GetUpdatesChan(u)
@@ -130,6 +129,8 @@ func Start() {
 		if update.Message == nil {
 			continue
 		}
+		fmt.Println("Received message: " + update.Message.Text)
+
 		if update.Message.Text == "reset" {
 			err = deleteUserByTelegramID(update.Message.Chat.ID)
 			if err != nil {
