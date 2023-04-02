@@ -97,13 +97,13 @@ func logAction(name string) chromedp.Action {
 }
 func GetMessages(ctx context.Context) ([]Message, error) {
 	err := chromedp.Run(ctx, chromedp.Navigate(`https://synergia.librus.pl/wiadomosci`),
-		logAction("Навигация на страницу wiadomosci"))
-	chromedp.Sleep(4 * time.Second)
+		logAction("Навигация на страницу wiadomosci"),
+		chromedp.Sleep(4*time.Second))
 	if err != nil {
 		return nil, err
 	}
 	var links []*cdp.Node
-	tableCtx, cancelTable := context.WithTimeout(ctx, 2*time.Second)
+	tableCtx, cancelTable := context.WithTimeout(ctx, 1*time.Second)
 	defer cancelTable()
 	//err = chromedp.Run(tableCtx, chromedp.Nodes(`table.decorated td[style="font-weight: bold;"] a`, &links, chromedp.ByQueryAll))
 	err = chromedp.Run(tableCtx, chromedp.Nodes(`table.decorated td a`, &links, chromedp.ByQueryAll),
