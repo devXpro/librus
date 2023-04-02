@@ -3,6 +3,7 @@ package librus
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
 	"librus/helper"
@@ -37,15 +38,6 @@ func Login(login string, password string) (context.Context, context.CancelFunc, 
 		actx, _ = chromedp.NewRemoteAllocator(context.Background(), "ws://chrome:3000")
 	}
 	ctx, cancel = chromedp.NewContext(actx)
-
-	logAction := func(name string) chromedp.Action {
-		return chromedp.ActionFunc(func(ctx context.Context) error {
-			if helper.IsDebug() {
-				log.Printf("Операция: %s", name)
-			}
-			return nil
-		})
-	}
 
 	// Операции для авторизации
 	ops := []chromedp.Action{
@@ -95,23 +87,34 @@ func Login(login string, password string) (context.Context, context.CancelFunc, 
 	}
 	return ctx, cancel, nil
 }
-
+func logAction(name string) chromedp.Action {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		if helper.IsDebug() {
+			log.Printf("Операция: %s", name)
+		}
+		return nil
+	})
+}
 func GetMessages(ctx context.Context) ([]Message, error) {
-	err := chromedp.Run(ctx, chromedp.Navigate(`https://synergia.librus.pl/wiadomosci`))
-	chromedp.Sleep(3 * time.Second)
+	err := chromedp.Run(ctx, chromedp.Navigate(`https://synergia.librus.pl/wiadomosci`),
+		logAction("Навигация на страницу wiadomosci"))
+	chromedp.Sleep(4 * time.Second)
 	if err != nil {
 		return nil, err
 	}
 	var links []*cdp.Node
-	tableCtx, cancelTable := context.WithTimeout(ctx, time.Second)
+	tableCtx, cancelTable := context.WithTimeout(ctx, 2*time.Second)
 	defer cancelTable()
 	//err = chromedp.Run(tableCtx, chromedp.Nodes(`table.decorated td[style="font-weight: bold;"] a`, &links, chromedp.ByQueryAll))
-	err = chromedp.Run(tableCtx, chromedp.Nodes(`table.decorated td a`, &links, chromedp.ByQueryAll))
+	err = chromedp.Run(tableCtx, chromedp.Nodes(`table.decorated td a`, &links, chromedp.ByQueryAll),
+		logAction("Ищем ссылки в таблице"),
+	)
 
 	if err != nil {
 		return nil, err
 	}
 	var messages []Message
+	fmt.Sprintf("Обрабатываем линки %s штук", len(links))
 	for _, link := range links {
 		href := "https://synergia.librus.pl" + link.AttributeValue("href")
 		if strings.Contains(href, "javascript") {
@@ -154,5 +157,6 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 		}
 		messages = append(messages, Message{Link: href, Content: content, Date: date, Title: title, Author: author})
 	}
+	fmt.Println("Линки обработаны...")
 	return messages, nil
 }
