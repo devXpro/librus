@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
-	"io/ioutil"
 	"librus/helper"
 	"log"
+	"math"
 	"strings"
 	"time"
 )
@@ -98,27 +98,32 @@ func logAction(name string) chromedp.Action {
 	})
 }
 func GetMessages(ctx context.Context) ([]Message, error) {
-	var buf []byte
-
 	err := chromedp.Run(ctx, chromedp.Navigate(`https://synergia.librus.pl/wiadomosci`),
 		chromedp.WaitVisible(`body`, chromedp.ByQuery),
-		chromedp.Screenshot(`body`, &buf, chromedp.ByQuery),
 		logAction("Навигация на страницу wiadomosci"),
 		chromedp.Sleep(4*time.Second))
 	if err != nil {
 		return nil, err
 	}
-	// Сохраняем скриншот в файл
-	err = ioutil.WriteFile("screenshot.png", buf, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	var links []*cdp.Node
-	tableCtx, cancelTable := context.WithTimeout(ctx, 1*time.Second)
+	tableCtx, cancelTable := context.WithTimeout(ctx, 2*time.Second)
 	defer cancelTable()
+	deadline, ok := tableCtx.Deadline()
+	if ok {
+		timeout := deadline.Sub(time.Now())
+		if timeout > 0 {
+			timeoutSeconds := int64(math.Round(timeout.Seconds()))
+			fmt.Printf("Осталось %d секунд до таймаута\n", timeoutSeconds)
+		} else {
+			fmt.Println("Время таймаута истекло")
+		}
+	} else {
+		fmt.Println("В контексте не установлен таймаут")
+	}
 	//err = chromedp.Run(tableCtx, chromedp.Nodes(`table.decorated td[style="font-weight: bold;"] a`, &links, chromedp.ByQueryAll))
-	err = chromedp.Run(tableCtx, chromedp.Nodes(`table.decorated td a`, &links, chromedp.ByQueryAll),
+	err = chromedp.Run(tableCtx,
+		chromedp.Nodes(`table.decorated td a`, &links, chromedp.ByQueryAll),
 		logAction("Ищем ссылки в таблице"),
 	)
 
