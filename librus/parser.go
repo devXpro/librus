@@ -8,7 +8,6 @@ import (
 	"github.com/chromedp/chromedp"
 	"librus/helper"
 	"log"
-	"math"
 	"strings"
 	"time"
 )
@@ -109,21 +108,9 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 	var links []*cdp.Node
 	tableCtx, cancelTable := context.WithTimeout(ctx, 2*time.Second)
 	defer cancelTable()
-	deadline, ok := tableCtx.Deadline()
-	if ok {
-		timeout := deadline.Sub(time.Now())
-		if timeout > 0 {
-			timeoutSeconds := int64(math.Round(timeout.Seconds()))
-			fmt.Printf("Осталось %d секунд до таймаута\n", timeoutSeconds)
-		} else {
-			fmt.Println("Время таймаута истекло")
-		}
-	} else {
-		fmt.Println("В контексте не установлен таймаут")
-	}
 	//err = chromedp.Run(tableCtx, chromedp.Nodes(`table.decorated td[style="font-weight: bold;"] a`, &links, chromedp.ByQueryAll))
 	err = chromedp.Run(tableCtx,
-		chromedp.Nodes(`table.decorated td a`, &links, chromedp.ByQueryAll),
+		chromedp.Nodes(`table.decorated td > a`, &links, chromedp.BySearch),
 		logAction("Ищем ссылки в таблице"),
 	)
 
