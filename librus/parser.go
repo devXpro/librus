@@ -21,17 +21,21 @@ type Message struct {
 }
 
 func Login(login string, password string) (context.Context, context.CancelFunc, error) {
-
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 
-	options := []chromedp.ExecAllocatorOption{
-		chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 Edge/17.17134"),
-		chromedp.WindowSize(1920, 1080),
-		chromedp.Flag("disable-gpu", true),
-		chromedp.Flag("headless", true),
-	}
+	headless := true
+	var actx context.Context
+	if !headless {
+		options := []chromedp.ExecAllocatorOption{
+			chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 Edge/17.17134"),
+			chromedp.WindowSize(2000, 2000),
+			chromedp.Flag("headless", true),
+		}
 
-	actx, _ := chromedp.NewExecAllocator(ctx, options...)
+		actx, _ = chromedp.NewExecAllocator(ctx, options...)
+	} else {
+		actx, _ = chromedp.NewRemoteAllocator(context.Background(), "ws://chrome:3000")
+	}
 	ctx, cancel = chromedp.NewContext(actx)
 
 	logAction := func(name string) chromedp.Action {
@@ -45,6 +49,7 @@ func Login(login string, password string) (context.Context, context.CancelFunc, 
 
 	// Операции для авторизации
 	ops := []chromedp.Action{
+		chromedp.EmulateViewport(2000, 2000),
 		chromedp.Navigate(`https://portal.librus.pl/rodzina`),
 		logAction("Навигация на страницу https://portal.librus.pl/rodzina"),
 		chromedp.WaitVisible(`.modal-button__primary`, chromedp.ByQuery),

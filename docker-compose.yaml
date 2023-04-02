@@ -12,7 +12,10 @@ services:
       DEBUG: ${DEBUG}
       TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
       CHROME_HEADLESS: 1
-
+  chrome:
+    image: browserless/chrome
+    environment:
+      - DEFAULT_STEALTH=1
   mongodb:
     image: mongo:latest
     restart: always
