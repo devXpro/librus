@@ -8,6 +8,7 @@ import (
 	"github.com/chromedp/chromedp"
 	"librus/helper"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -30,7 +31,7 @@ func Login(login string, password string) (context.Context, context.CancelFunc, 
 		options := []chromedp.ExecAllocatorOption{
 			chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 Edge/17.17134"),
 			chromedp.WindowSize(2000, 2000),
-			chromedp.Flag("headless", true),
+			chromedp.Flag("headless", false),
 		}
 
 		actx, _ = chromedp.NewExecAllocator(ctx, options...)
@@ -100,16 +101,16 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 	err := chromedp.Run(ctx, chromedp.Navigate(`https://synergia.librus.pl/wiadomosci`),
 		chromedp.WaitVisible(`body`, chromedp.ByQuery),
 		logAction("Навигация на страницу wiadomosci"),
-		chromedp.Sleep(4*time.Second))
+		chromedp.Sleep(3*time.Second))
 	if err != nil {
 		return nil, err
 	}
 
 	var links []*cdp.Node
-	tableCtx, cancelTable := context.WithTimeout(ctx, 2*time.Second)
-	defer cancelTable()
-	//err = chromedp.Run(tableCtx, chromedp.Nodes(`table.decorated td[style="font-weight: bold;"] a`, &links, chromedp.ByQueryAll))
-	err = chromedp.Run(tableCtx, chromedp.Nodes(`table.decorated td a`, &links, chromedp.ByQueryAll))
+	err = chromedp.Run(ctx,
+		chromedp.Nodes(`table.decorated td a`, &links, chromedp.ByQueryAll),
+		logAction(strconv.Itoa(len(links))+"go go"),
+	)
 
 	if err != nil {
 		return nil, err
