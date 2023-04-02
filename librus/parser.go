@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
 	"librus/helper"
 	"log"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -36,8 +34,8 @@ func Login(login string, password string) (context.Context, context.CancelFunc, 
 
 		actx, _ = chromedp.NewExecAllocator(ctx, options...)
 	} else {
-		actx, _ = chromedp.NewRemoteAllocator(context.Background(), "ws://chrome:3000")
-		//actx, _ = chromedp.NewRemoteAllocator(context.Background(), "ws://localhost:3900")
+		//actx, _ = chromedp.NewRemoteAllocator(context.Background(), "ws://chrome:3000")
+		actx, _ = chromedp.NewRemoteAllocator(context.Background(), "ws://localhost:3900")
 	}
 	ctx, cancel = chromedp.NewContext(actx)
 
@@ -106,25 +104,33 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 		return nil, err
 	}
 
-	var links []*cdp.Node
 	linksCtx, linksCancel := context.WithTimeout(ctx, time.Second)
 	defer linksCancel()
-	err = chromedp.Run(linksCtx,
-		chromedp.Nodes(`table.decorated td a`, &links, chromedp.ByQueryAll),
-		logAction(strconv.Itoa(len(links))+" go go"),
-	)
+	//table.decorated td[style=\"font-weight: bold;\"] a
+	//table.decorated td a
+	js := `
+  const links = Array.from(document.querySelectorAll("table.decorated td a"));
+  const hrefs = [];
+  links.forEach(function(link) {
+    hrefs.push(link.href);
+  });
+  hrefs;
+`
 
-	if err != nil {
+	// Выполняем JavaScript-код и получаем список ссылок
+	var links []string
+	fmt.Println("Ищем линки...")
+	if err = chromedp.Run(linksCtx, chromedp.EvaluateAsDevTools(js, &links)); err != nil {
 		return nil, err
 	}
+
 	var messages []Message
-	fmt.Printf("Обрабатываем линки %s штук", len(links))
+	fmt.Printf("Обрабатываем линки %d штук", len(links))
 	for _, link := range links {
-		href := "https://synergia.librus.pl" + link.AttributeValue("href")
-		if strings.Contains(href, "javascript") {
+		if strings.Contains(link, "javascript") {
 			continue
 		}
-		err = chromedp.Run(ctx, chromedp.Navigate(href))
+		err = chromedp.Run(ctx, chromedp.Navigate(link))
 		if err != nil {
 			return nil, err
 		}
@@ -159,7 +165,7 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 		if err != nil {
 			return nil, err
 		}
-		messages = append(messages, Message{Link: href, Content: content, Date: date, Title: title, Author: author})
+		messages = append(messages, Message{Link: link, Content: content, Date: date, Title: title, Author: author})
 	}
 	fmt.Println("Линки обработаны...")
 	return messages, nil
