@@ -125,7 +125,7 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 			links = append(links, href)
 		}
 	})
-
+	fmt.Println("линки готовы!")
 	var messages []Message
 	fmt.Printf("Обрабатываем линки %d штук", len(links))
 	for _, link := range links {
