@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/chromedp"
+	"io/ioutil"
 	"librus/helper"
 	"log"
 	"strings"
@@ -36,6 +37,7 @@ func Login(login string, password string) (context.Context, context.CancelFunc, 
 		actx, _ = chromedp.NewExecAllocator(ctx, options...)
 	} else {
 		actx, _ = chromedp.NewRemoteAllocator(context.Background(), "ws://chrome:3000")
+		//actx, _ = chromedp.NewRemoteAllocator(context.Background(), "ws://localhost:3900")
 	}
 	ctx, cancel = chromedp.NewContext(actx)
 
@@ -96,12 +98,22 @@ func logAction(name string) chromedp.Action {
 	})
 }
 func GetMessages(ctx context.Context) ([]Message, error) {
+	var buf []byte
+
 	err := chromedp.Run(ctx, chromedp.Navigate(`https://synergia.librus.pl/wiadomosci`),
+		chromedp.WaitVisible(`body`, chromedp.ByQuery),
+		chromedp.Screenshot(`body`, &buf, chromedp.ByQuery),
 		logAction("Навигация на страницу wiadomosci"),
 		chromedp.Sleep(4*time.Second))
 	if err != nil {
 		return nil, err
 	}
+	// Сохраняем скриншот в файл
+	err = ioutil.WriteFile("screenshot.png", buf, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	var links []*cdp.Node
 	tableCtx, cancelTable := context.WithTimeout(ctx, 1*time.Second)
 	defer cancelTable()
