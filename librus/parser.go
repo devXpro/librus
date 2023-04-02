@@ -134,6 +134,8 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 			continue
 		}
 		err = chromedp.Run(ctx, chromedp.Navigate(link))
+		fmt.Println(link)
+		fmt.Println("err = chromedp.Run(ctx, chromedp.Navigate(link))")
 		if err != nil {
 			return nil, err
 		}
@@ -143,6 +145,7 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 			&dateString, chromedp.NodeVisible,
 			chromedp.BySearch),
 		)
+		fmt.Println("chromedp.Run(ctx, chromedp.Text(")
 		var author string
 		err = chromedp.Run(ctx, chromedp.Text(
 			"//*[@id=\"formWiadomosci\"]/div/div/table/tbody/tr/td[2]/table[2]/tbody/tr[1]/td[2]",
