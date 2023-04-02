@@ -119,7 +119,8 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 	}
 	printLog("Ищем все ссылки в таблице с классом \"decorated\" ...")
 	var links []string
-	doc.Find("table.decorated td a").Each(func(i int, s *goquery.Selection) {
+	//table.decorated td a
+	doc.Find("table.decorated td[style=\"font-weight: bold;\"] a").Each(func(i int, s *goquery.Selection) {
 		href, ok := s.Attr("href")
 		if ok {
 			links = append(links, href)
