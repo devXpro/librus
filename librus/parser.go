@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/PuerkitoBio/goquery"
 	"github.com/chromedp/chromedp"
 	"librus/helper"
 	"log"
@@ -34,8 +35,8 @@ func Login(login string, password string) (context.Context, context.CancelFunc, 
 
 		actx, _ = chromedp.NewExecAllocator(ctx, options...)
 	} else {
-		actx, _ = chromedp.NewRemoteAllocator(context.Background(), "ws://chrome:3000")
-		//actx, _ = chromedp.NewRemoteAllocator(context.Background(), "ws://localhost:3900")
+		//actx, _ = chromedp.NewRemoteAllocator(context.Background(), "ws://chrome:3000")
+		actx, _ = chromedp.NewRemoteAllocator(context.Background(), "ws://localhost:3900")
 	}
 	ctx, cancel = chromedp.NewContext(actx)
 
@@ -106,27 +107,31 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 
 	linksCtx, linksCancel := context.WithTimeout(ctx, time.Second)
 	defer linksCancel()
-	//table.decorated td[style=\"font-weight: bold;\"] a
-	//table.decorated td a
-	js := `
-  const links = Array.from(document.querySelectorAll("table.decorated td a"));
-  const hrefs = [];
-  links.forEach(function(link) {
-    hrefs.push(link.href);
-  });
-  hrefs;
-`
-
-	// Выполняем JavaScript-код и получаем список ссылок
-	var links []string
-	fmt.Println("Ищем линки...")
-	if err = chromedp.Run(linksCtx, chromedp.EvaluateAsDevTools(js, &links)); err != nil {
+	// Получаем HTML-код страницы
+	var html string
+	if err = chromedp.Run(linksCtx, chromedp.InnerHTML(`html`, &html)); err != nil {
 		return nil, err
 	}
+	fmt.Println("Таблица получена!")
+	// Загружаем HTML-код страницы в объект goquery.Document
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+	if err != nil {
+		return nil, err
+	}
+
+	// Ищем все ссылки в таблице с классом "decorated"
+	var links []string
+	doc.Find("table.decorated td a").Each(func(i int, s *goquery.Selection) {
+		href, ok := s.Attr("href")
+		if ok {
+			links = append(links, href)
+		}
+	})
 
 	var messages []Message
 	fmt.Printf("Обрабатываем линки %d штук", len(links))
 	for _, link := range links {
+		link = "https://synergia.librus.pl" + link
 		if strings.Contains(link, "javascript") {
 			continue
 		}
