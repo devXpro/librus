@@ -114,7 +114,7 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 		return nil, err
 	}
 	var messages []Message
-	fmt.Sprintf("Обрабатываем линки %s штук", len(links))
+	fmt.Printf("Обрабатываем линки %s штук", len(links))
 	for _, link := range links {
 		href := "https://synergia.librus.pl" + link.AttributeValue("href")
 		if strings.Contains(href, "javascript") {
