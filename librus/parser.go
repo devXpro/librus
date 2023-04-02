@@ -112,14 +112,12 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 	if err = chromedp.Run(linksCtx, chromedp.InnerHTML(`html`, &html)); err != nil {
 		return nil, err
 	}
-	fmt.Println("Таблица получена!")
-	// Загружаем HTML-код страницы в объект goquery.Document
+	fmt.Println("Таблица получена! Загружаем HTML-код страницы в объект goquery.Document")
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
 		return nil, err
 	}
-
-	// Ищем все ссылки в таблице с классом "decorated"
+	fmt.Println("Ищем все ссылки в таблице с классом \"decorated\" ...")
 	var links []string
 	doc.Find("table.decorated td a").Each(func(i int, s *goquery.Selection) {
 		href, ok := s.Attr("href")
