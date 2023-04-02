@@ -107,9 +107,11 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 	}
 
 	var links []*cdp.Node
-	err = chromedp.Run(ctx,
+	linksCtx, linksCancel := context.WithTimeout(ctx, time.Second)
+	defer linksCancel()
+	err = chromedp.Run(linksCtx,
 		chromedp.Nodes(`table.decorated td a`, &links, chromedp.ByQueryAll),
-		logAction(strconv.Itoa(len(links))+"go go"),
+		logAction(strconv.Itoa(len(links))+" go go"),
 	)
 
 	if err != nil {
