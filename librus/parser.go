@@ -109,10 +109,7 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 	tableCtx, cancelTable := context.WithTimeout(ctx, 2*time.Second)
 	defer cancelTable()
 	//err = chromedp.Run(tableCtx, chromedp.Nodes(`table.decorated td[style="font-weight: bold;"] a`, &links, chromedp.ByQueryAll))
-	err = chromedp.Run(tableCtx,
-		chromedp.Nodes(`table.decorated td > a`, &links, chromedp.BySearch),
-		logAction("Ищем ссылки в таблице"),
-	)
+	err = chromedp.Run(tableCtx, chromedp.Nodes(`table.decorated td a`, &links, chromedp.ByQueryAll))
 
 	if err != nil {
 		return nil, err
