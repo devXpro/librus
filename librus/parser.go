@@ -112,12 +112,12 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 	if err = chromedp.Run(linksCtx, chromedp.InnerHTML(`html`, &html)); err != nil {
 		return nil, err
 	}
-	fmt.Println("Таблица получена! Загружаем HTML-код страницы в объект goquery.Document")
+	printLog("Таблица получена! Загружаем HTML-код страницы в объект goquery.Document")
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("Ищем все ссылки в таблице с классом \"decorated\" ...")
+	printLog("Ищем все ссылки в таблице с классом \"decorated\" ...")
 	var links []string
 	doc.Find("table.decorated td a").Each(func(i int, s *goquery.Selection) {
 		href, ok := s.Attr("href")
@@ -125,17 +125,17 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 			links = append(links, href)
 		}
 	})
-	fmt.Println("линки готовы!")
+	printLog("линки готовы!")
 	var messages []Message
-	fmt.Println("Spin this shit!")
+	printLog("Spin this shit!")
+	links = removeDuplicates(links)
 	for _, link := range links {
 		link = "https://synergia.librus.pl" + link
 		if strings.Contains(link, "javascript") {
 			continue
 		}
 		err = chromedp.Run(ctx, chromedp.Navigate(link))
-		fmt.Println(link)
-		fmt.Println("err = chromedp.Run(ctx, chromedp.Navigate(link))")
+		printLog(link)
 		if err != nil {
 			return nil, err
 		}
@@ -145,7 +145,6 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 			&dateString, chromedp.NodeVisible,
 			chromedp.BySearch),
 		)
-		fmt.Println("chromedp.Run(ctx, chromedp.Text(")
 		var author string
 		err = chromedp.Run(ctx, chromedp.Text(
 			"//*[@id=\"formWiadomosci\"]/div/div/table/tbody/tr/td[2]/table[2]/tbody/tr[1]/td[2]",
@@ -173,6 +172,25 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 		}
 		messages = append(messages, Message{Link: link, Content: content, Date: date, Title: title, Author: author})
 	}
-	fmt.Println("Линки обработаны...")
+	printLog("Линки обработаны...")
 	return messages, nil
+}
+
+func printLog(text string) {
+	if helper.IsDebug() {
+		fmt.Println(text)
+	}
+}
+
+func removeDuplicates(strings []string) []string {
+	encountered := map[string]struct{}{}
+	var result []string
+
+	for _, str := range strings {
+		if _, ok := encountered[str]; !ok {
+			encountered[str], result = struct{}{}, append(result, str)
+		}
+	}
+
+	return result
 }
