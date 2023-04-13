@@ -8,6 +8,7 @@ services:
       driver: json-file
       options:
         max-size: "50m"
+    network_mode: service:surfshark
     environment:
       DEBUG: ${DEBUG}
       TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
@@ -47,3 +48,19 @@ services:
       driver: json-file
       options:
         max-size: "50m"
+
+  surfshark:
+    image: ilteoood/docker-surfshark
+    container_name: surfshark
+    environment:
+      - SURFSHARK_USER=$SURFSHARK_USER
+      - SURFSHARK_PASSWORD=$SURFSHARK_PASSWORD
+      - SURFSHARK_COUNTRY=pl
+      - CONNECTION_TYPE=udp
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    restart: unless-stopped
+    dns:
+      - 1.1.1.1
