@@ -4,6 +4,7 @@ services:
     restart: always
     build: .
     platform: linux/x86_64
+    network_mode: service:surfshark
     logging:
       driver: json-file
       options:
@@ -33,6 +34,7 @@ services:
 
   mongo-express:
     image: mongo-express
+    network_mode: service:surfshark
     restart: always
     environment:
       - ME_CONFIG_MONGODB_SERVER=mongodb
