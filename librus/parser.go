@@ -2,27 +2,92 @@ package librus
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/chromedp/chromedp"
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"librus/helper"
 	"log"
 	"strings"
 	"time"
 )
 
+type MessageType string
+
+const (
+	MsgTypeMessage      MessageType = "message"
+	MsgTypeNotification MessageType = "notification"
+	MsgTypeNews         MessageType = "news"
+)
+
 type Message struct {
-	Link       string    `bson:"link"`
-	Author     string    `bson:"author"`
-	Title      string    `bson:"title"`
-	Content    string    `bson:"content"`
-	Date       time.Time `bson:"date"`
-	TelegramID int64     `bson:"telegram_id"`
+	Id         string      `bson:"_id"`
+	Type       MessageType `bson:"type"`
+	Link       string      `bson:"link"`
+	Author     string      `bson:"author"`
+	Title      string      `bson:"title"`
+	Content    string      `bson:"content"`
+	Date       time.Time   `bson:"date"`
+	TelegramID int64       `bson:"telegram_id"`
+}
+
+func (message *Message) GenerateId() {
+	stringToHash := ""
+	if message.Type == MsgTypeNotification {
+		stringToHash = message.Title + message.Date.Format("2006-01-02")
+	} else if message.Type == MsgTypeMessage {
+		stringToHash = message.Link
+	} else {
+		panic("Wrong message type")
+	}
+	h := md5.New()
+	h.Write([]byte(stringToHash))
+	message.Id = hex.EncodeToString(h.Sum(nil))
+}
+
+func (message *Message) Send(bot *tgbotapi.BotAPI, telegramId int64) error {
+	msg := tgbotapi.NewMessage(telegramId, "")
+	msg.ParseMode = tgbotapi.ModeHTML
+
+	// Добавляем информацию о типе сообщения
+	var typeIcon string
+	switch message.Type {
+	case MsgTypeMessage:
+		typeIcon = "📩"
+	case MsgTypeNotification:
+		typeIcon = "🔔"
+	default:
+		typeIcon = ""
+	}
+	msg.Text += fmt.Sprintf("%s <b>%s</b>\n\n", typeIcon, message.Title)
+
+	// Добавляем информацию об авторе
+	msg.Text += fmt.Sprintf("👤 <i>От: %s</i>\n\n", message.Author)
+
+	// Добавляем основной текст
+	msg.Text += "📝 " + replaceBrTags(message.Content) + "\n\n"
+
+	// Добавляем дату и время
+	msg.Text += fmt.Sprintf("📅 %s", message.Date.Format("02.01.2006 15:04"))
+	msg.Text += "\n_______________________________"
+
+	// Отправляем сообщение
+	_, err := bot.Send(msg)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func replaceBrTags(s string) string {
+	return strings.ReplaceAll(s, "<br>", "")
 }
 
 func Login(login string, password string) (context.Context, context.CancelFunc, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 
 	headless := true
 	var actx context.Context
@@ -72,14 +137,16 @@ func Login(login string, password string) (context.Context, context.CancelFunc, 
 		logAction("Ввод пароля"),
 		chromedp.Click(`#LoginBtn`),
 		logAction("Нажатие на кнопку входа"),
-		chromedp.Sleep(2 * time.Second),
+		chromedp.Sleep(3 * time.Second),
 	}
 
 	if err := chromedp.Run(ctx, ops...); err != nil {
+		cancel()
 		return nil, cancel, err
 	}
 	var currentURL string
 	if err := chromedp.Run(ctx, chromedp.Location(&currentURL)); err != nil {
+		cancel()
 		return nil, cancel, err
 	}
 	if currentURL == "https://portal.librus.pl/rodzina/synergia/loguj" {
@@ -96,6 +163,7 @@ func logAction(name string) chromedp.Action {
 		return nil
 	})
 }
+
 func GetMessages(ctx context.Context) ([]Message, error) {
 	err := chromedp.Run(ctx, chromedp.Navigate(`https://synergia.librus.pl/wiadomosci`),
 		chromedp.WaitVisible(`body`, chromedp.ByQuery),
@@ -171,9 +239,58 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 		if err != nil {
 			return nil, err
 		}
-		messages = append(messages, Message{Link: link, Content: content, Date: date, Title: title, Author: author})
+		message := Message{Link: link, Content: content, Date: date, Title: title, Author: author, Type: MsgTypeMessage}
+		message.GenerateId()
+		messages = append(messages, message)
 	}
 	printLog("Линки обработаны...")
+	return messages, nil
+}
+
+func GetNews(ctx context.Context) ([]Message, error) {
+	const url = "https://synergia.librus.pl/ogloszenia"
+	var messages []Message
+
+	var html string
+	if err := chromedp.Run(ctx, chromedp.Navigate(url), chromedp.OuterHTML("html", &html)); err != nil {
+		return nil, err
+	}
+
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
+	if err != nil {
+		return nil, err
+	}
+
+	tableNodes := doc.Find("table")
+
+	var parseErr error
+	tableNodes.Each(func(i int, tableNode *goquery.Selection) {
+		message := Message{
+			Type:    "notification",
+			Link:    url,
+			Author:  tableNode.Find("th:contains('Dodał')").Next().Text(),
+			Title:   tableNode.Find("thead td[colspan='2']").Text(),
+			Content: tableNode.Find("th:contains('Treść')").Next().Text(),
+			Date: func() time.Time {
+				var date time.Time
+				date, err = time.Parse("2006-01-02",
+					tableNode.Find("th:contains('Data publikacji')").Next().Text())
+				if err != nil {
+					parseErr = err
+					return time.Time{}
+				}
+				return date
+			}(),
+			TelegramID: 0,
+		}
+		message.GenerateId()
+		messages = append(messages, message)
+	})
+
+	if parseErr != nil {
+		return nil, parseErr
+	}
+
 	return messages, nil
 }
 

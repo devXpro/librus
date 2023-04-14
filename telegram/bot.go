@@ -37,11 +37,20 @@ func checkNewMessagesPeriodically(bot *tgbotapi.BotAPI) {
 			ctx, cancel, err := librus.Login(user.Login, user.Password)
 
 			if err != nil {
-				cancel()
 				fmt.Println(err)
 				continue
 			}
 			msgs, err := librus.GetMessages(ctx)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			news, err := librus.GetNews(ctx)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			msgs = append(msgs, news...)
 			cancel()
 
 			if err != nil {
@@ -64,27 +73,9 @@ func checkNewMessagesPeriodically(bot *tgbotapi.BotAPI) {
 			})
 
 			for _, message := range msgs {
-				msg := tgbotapi.NewMessage(user.TelegramID, "")
-				msg.ParseMode = tgbotapi.ModeHTML
-
-				// добавляем заголовок
-				titleLink := fmt.Sprintf("<a href='%s'>%s</a>", message.Link, message.Title)
-				msg.Text += fmt.Sprintf("📰 <b>%s</b>\n\n", titleLink)
-
-				// добавляем информацию об авторе
-				msg.Text += fmt.Sprintf("👤 <i>От: %s</i>\n\n", message.Author)
-
-				// добавляем основной текст
-				msg.Text += "📝 " + replaceBrTags(message.Content) + "\n\n"
-
-				// добавляем дату и время
-				msg.Text += fmt.Sprintf("📅 %s", message.Date.Format("02.01.2006 15:04"))
-				msg.Text += "\n_______________________________"
-
-				// отправляем сообщение
-				_, err = bot.Send(msg)
+				err = message.Send(bot, user.TelegramID)
 				if err != nil {
-					log.Println(err)
+					fmt.Println(err)
 				}
 			}
 		}
@@ -98,10 +89,6 @@ func addUserIdToMessages(msgs []librus.Message, id int64) []librus.Message {
 		result = append(result, msg)
 	}
 	return result
-}
-
-func replaceBrTags(s string) string {
-	return strings.ReplaceAll(s, "<br>", "")
 }
 
 func Start() {
@@ -130,7 +117,15 @@ func Start() {
 			continue
 		}
 		fmt.Println("Received message: " + update.Message.Text)
-
+		if update.Message.Text == "delete_all_messages_"+helper.GetEnv("MONGO_EXPRESS_PASSWORD", "pass") {
+			_ = deleteAllMessages()
+			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "All messages was deleted")
+			_, err = bot.Send(msg)
+			if err != nil {
+				log.Println(err)
+			}
+			continue
+		}
 		if update.Message.Text == "reset" {
 			err = deleteUserByTelegramID(update.Message.Chat.ID)
 			if err != nil {
