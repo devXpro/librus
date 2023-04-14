@@ -59,7 +59,7 @@ services:
       - SURFSHARK_PASSWORD=$SURFSHARK_PASSWORD
       - SURFSHARK_COUNTRY=pl
       - CONNECTION_TYPE=udp
-      - LAN_NETWORK=
+      - LAN_NETWORK=192.168.0.0/24
     cap_add:
       - NET_ADMIN
     devices:
