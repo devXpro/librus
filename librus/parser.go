@@ -87,7 +87,7 @@ func replaceBrTags(s string) string {
 }
 
 func Login(login string, password string) (context.Context, context.CancelFunc, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 
 	headless := true
 	var actx context.Context
