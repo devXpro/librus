@@ -35,7 +35,7 @@ func Login(login string, password string) (context.Context, context.CancelFunc, 
 
 		actx, _ = chromedp.NewExecAllocator(ctx, options...)
 	} else {
-		actx, _ = chromedp.NewRemoteAllocator(context.Background(), "ws://chrome:3000")
+		actx, _ = chromedp.NewRemoteAllocator(context.Background(), "ws://surfshark:3000")
 		//actx, _ = chromedp.NewRemoteAllocator(context.Background(), "ws://localhost:3900")
 	}
 	ctx, cancel = chromedp.NewContext(actx)
