@@ -31,7 +31,7 @@ func checkLoginAndPassword(login string, password string) bool {
 
 func checkNewMessagesPeriodically(bot *tgbotapi.BotAPI) {
 	for {
-		time.Sleep(5 * time.Second)
+		time.Sleep(30 * time.Minute)
 		users := getUsersFromDatabase()
 		for _, user := range users {
 			ctx, cancel, err := librus.Login(user.Login, user.Password)
