@@ -117,7 +117,7 @@ func Start() {
 			continue
 		}
 		fmt.Println("Received message: " + update.Message.Text)
-		if update.Message.Text == "delete_all_messages_"+helper.GetEnv("MONGO_EXPRESS_PASSWORD", "pass") {
+		if update.Message.Text == "delete_all_messages_"+helper.GetEnv("TELEGRAM_TOKEN", "pass") {
 			_ = deleteAllMessages()
 			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "All messages was deleted")
 			_, err = bot.Send(msg)
