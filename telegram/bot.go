@@ -69,7 +69,7 @@ func checkNewMessagesPeriodically(bot *tgbotapi.BotAPI) {
 			}
 			msgs = addUserIdToMessages(msgs, user.TelegramID)
 
-			msgs, err = addMessagesToDatabase(msgs)
+			msgs, err = addMessagesToDatabase(msgs, user.TelegramID)
 
 			if err != nil {
 				fmt.Println(err)

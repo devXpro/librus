@@ -78,12 +78,15 @@ func findUserByTelegramID(telegramID int64) (*User, error) {
 	return &user, nil
 }
 
-func addMessagesToDatabase(messages []librus.Message) ([]librus.Message, error) {
+func addMessagesToDatabase(messages []librus.Message, telegramId int64) ([]librus.Message, error) {
 	collection := client.Database("librus").Collection("message")
 
 	// Find existing messages
 	existingMessages := make(map[string]bool)
-	cursor, err := collection.Find(context.Background(), bson.M{"_id": bson.M{"$in": getIds(messages)}})
+	cursor, err := collection.Find(
+		context.Background(),
+		bson.M{"_id": bson.M{"$in": getIds(messages)}, "telegram_id": telegramId},
+	)
 	if err != nil {
 		return nil, err
 	}
