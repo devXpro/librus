@@ -37,7 +37,7 @@ type Message struct {
 func (message *Message) GenerateId() {
 	stringToHash := ""
 	if message.Type == MsgTypeNotification {
-		stringToHash = message.Title + message.Date.Format("2006-01-02")
+		stringToHash = message.Title + message.Content + message.Date.Format("2006-01-02")
 	} else if message.Type == MsgTypeMessage {
 		stringToHash = message.Link
 	} else {
