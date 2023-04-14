@@ -16,6 +16,8 @@ import (
 
 var client *mongo.Client
 
+var updateNow = make(chan struct{})
+
 func checkLoginAndPassword(login string, password string) bool {
 	if login == "" {
 		return false
@@ -31,7 +33,12 @@ func checkLoginAndPassword(login string, password string) bool {
 
 func checkNewMessagesPeriodically(bot *tgbotapi.BotAPI) {
 	for {
-		time.Sleep(30 * time.Minute)
+		select {
+		case <-time.After(30 * time.Minute):
+			fmt.Println("Start updating...")
+		case <-updateNow:
+			fmt.Println("Start force update")
+		}
 		users := getUsersFromDatabase()
 		for _, user := range users {
 			ctx, cancel, err := librus.Login(user.Login, user.Password)
@@ -124,6 +131,10 @@ func Start() {
 			if err != nil {
 				log.Println(err)
 			}
+			continue
+		}
+		if update.Message.Text == "update_now_"+helper.GetEnv("TELEGRAM_TOKEN", "pass") {
+			updateNow <- struct{}{}
 			continue
 		}
 		if update.Message.Text == "reset" {
