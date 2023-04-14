@@ -12,11 +12,17 @@ services:
       DEBUG: ${DEBUG}
       TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
       CHROME_HEADLESS: 1
+    networks:
+      - app_network
+
   chrome:
     image: browserless/chrome
-    network_mode: service:surfshark
     environment:
       - DEFAULT_STEALTH=1
+    networks:
+      - app_network
+      - surfshark_network
+
   mongodb:
     image: mongo:latest
     restart: always
@@ -30,6 +36,8 @@ services:
       driver: json-file
       options:
         max-size: "50m"
+    networks:
+      - app_network
 
   mongo-express:
     image: mongo-express
@@ -48,6 +56,8 @@ services:
       driver: json-file
       options:
         max-size: "50m"
+    networks:
+      - app_network
 
   surfshark:
     image: ilteoood/docker-surfshark
@@ -65,3 +75,12 @@ services:
     restart: unless-stopped
     dns:
       - 1.1.1.1
+    networks:
+      - surfshark_network
+
+networks:
+  app_network:
+    driver: bridge
+  surfshark_network:
+    external:
+      name: surfshark
