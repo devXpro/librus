@@ -82,5 +82,4 @@ networks:
   app_network:
     driver: bridge
   surfshark_network:
-    external:
-      name: surfshark
+    driver: bridge
