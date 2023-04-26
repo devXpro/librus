@@ -2,3 +2,4 @@
 .env
 .docker/data
 docker-compose.override.yml
+creds.json

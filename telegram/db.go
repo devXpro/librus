@@ -17,6 +17,7 @@ type User struct {
 	Login      string `bson:"login"`
 	Password   string `bson:"password"`
 	TelegramID int64  `bson:"telegram_id"`
+	Language   string `bson:"language"`
 }
 
 func init() {
@@ -76,6 +77,19 @@ func findUserByTelegramID(telegramID int64) (*User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+func UpdateUserLanguageByTelegramID(telegramID int64, language string) error {
+	collection := client.Database("librus").Collection("user")
+	_, err := collection.UpdateOne(
+		context.Background(),
+		bson.M{"telegram_id": telegramID},
+		bson.M{"$set": bson.M{"language": language}},
+	)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func addMessagesToDatabase(messages []librus.Message, telegramId int64) ([]librus.Message, error) {
