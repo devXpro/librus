@@ -10,6 +10,7 @@ import (
 	"github.com/chromedp/chromedp"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"librus/helper"
+	"librus/translator"
 	"log"
 	"strings"
 	"time"
@@ -46,6 +47,22 @@ func (message *Message) GenerateId() {
 	h := md5.New()
 	h.Write([]byte(stringToHash))
 	message.Id = hex.EncodeToString(h.Sum(nil))
+}
+func (message *Message) Translate(lang string) {
+	translation, err := translator.TranslateText(lang, message.Title)
+	if err == nil {
+		message.Title = translation
+	}
+
+	translation, err = translator.TranslateText(lang, message.Content)
+	if err == nil {
+		message.Content = translation
+	}
+
+	translation, err = translator.TranslateText(lang, message.Author)
+	if err == nil {
+		message.Author = translation
+	}
 }
 
 func (message *Message) Send(bot *tgbotapi.BotAPI, telegramId int64) error {

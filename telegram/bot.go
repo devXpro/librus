@@ -7,6 +7,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"librus/helper"
 	"librus/librus"
+	"librus/translator"
 	"log"
 	"net/http"
 	"sort"
@@ -80,6 +81,9 @@ func checkNewMessagesPeriodically(bot *tgbotapi.BotAPI) {
 			})
 
 			for _, message := range msgs {
+				if user.Language != "" {
+					message.Translate(user.Language)
+				}
 				err = message.Send(bot, user.TelegramID)
 				if err != nil {
 					fmt.Println(err)
@@ -154,6 +158,26 @@ func Start() {
 		}
 		user, _ := findUserByTelegramID(update.Message.Chat.ID)
 		if user != nil {
+			if strings.Contains(update.Message.Text, "lang:") {
+				langParts := strings.Split(update.Message.Text, ":")
+				lang := langParts[1]
+				text := "Язык успешно установлен, теперь все мессаджи будут переводится!"
+				text, err = translator.TranslateText(lang, text)
+				if err != nil {
+					text = "Wrong language '" + lang + "'"
+				} else {
+					err = UpdateUserLanguageByTelegramID(update.Message.Chat.ID, lang)
+					if err != nil {
+						text = "Can't update user language"
+					}
+				}
+				msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
+				_, err = bot.Send(msg)
+				if err != nil {
+					log.Println(err)
+				}
+				continue
+			}
 			msg := tgbotapi.NewMessage(
 				update.Message.Chat.ID,
 				"Не дрочи бот по чем зря, подписька уже оформлена, для сброса подписьки напиши reset",
