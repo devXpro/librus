@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"librus/helper"
-	"librus/librus"
 	"librus/model"
 	"librus/mongo"
+	"librus/parser"
 	"librus/telegram/channel"
 	"librus/telegram/handler"
 	"log"
@@ -58,18 +58,18 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 		}
 		users := mongo.GetUsersFromDatabase()
 		for _, user := range users {
-			ctx, cancel, err := librus.Login(user.Login, user.Password)
+			ctx, cancel, err := parser.Login(user.Login, user.Password)
 
 			if err != nil {
 				fmt.Println(err)
 				continue
 			}
-			msgs, err := librus.GetMessages(ctx)
+			msgs, err := parser.GetMessages(ctx)
 			if err != nil {
 				fmt.Println(err)
 				continue
 			}
-			news, err := librus.GetNews(ctx)
+			news, err := parser.GetNews(ctx)
 			if err != nil {
 				fmt.Println(err)
 				continue

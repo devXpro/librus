@@ -3,8 +3,8 @@ package handler
 import (
 	"errors"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"librus/librus"
 	"librus/mongo"
+	"librus/parser"
 	"librus/translator"
 	"log"
 	"strings"
@@ -29,7 +29,7 @@ func (a *Answer) Handle(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		user.SendTranslatedMessage(bot, "It is not possible to reply to this type of messages.")
 		return
 	}
-	ctx, cancel, err := librus.Login(user.Login, user.Password)
+	ctx, cancel, err := parser.Login(user.Login, user.Password)
 	defer cancel()
 	if err != nil {
 		user.SendTranslatedMessage(bot, "Login issues...")
@@ -44,7 +44,7 @@ func (a *Answer) Handle(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 			return
 		}
 	}
-	err = librus.AnswerMessage(link, text, ctx)
+	err = parser.AnswerMessage(link, text, ctx)
 	if err != nil {
 		user.SendTranslatedMessage(bot, "Can't answer, something went wrong")
 	}
