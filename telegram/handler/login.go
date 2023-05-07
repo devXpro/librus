@@ -3,9 +3,9 @@ package handler
 import (
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"librus/librus"
 	"librus/model"
 	"librus/mongo"
+	"librus/parser"
 	"log"
 	"strings"
 )
@@ -59,7 +59,7 @@ func (l *Login) checkLoginAndPassword(login string, password string) bool {
 	if login == "" {
 		return false
 	}
-	_, cancel, err := librus.Login(login, password)
+	_, cancel, err := parser.Login(login, password)
 	if err != nil {
 		fmt.Println(err)
 		return false
