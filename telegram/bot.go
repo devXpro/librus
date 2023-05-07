@@ -4,43 +4,59 @@ import (
 	"crypto/tls"
 	"fmt"
 	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"go.mongodb.org/mongo-driver/mongo"
 	"librus/helper"
 	"librus/librus"
-	"librus/translator"
+	"librus/model"
+	"librus/mongo"
+	"librus/telegram/channel"
+	"librus/telegram/handler"
 	"log"
 	"net/http"
 	"sort"
-	"strings"
 	"time"
 )
 
-var client *mongo.Client
+func Start() {
+	bot := createBot()
+	go checkNewLibrusMessagesPeriodically(bot)
+	u := createUpdateConfig()
+	for update := range bot.GetUpdatesChan(u) {
+		if update.Message == nil {
+			continue
+		}
 
-var updateNow = make(chan struct{})
+		logReceivedMessage(update)
 
-func checkLoginAndPassword(login string, password string) bool {
-	if login == "" {
-		return false
+		handlers := []handler.Handler{
+			&handler.DeleteAllMessages{},
+			&handler.UpdateNow{},
+			&handler.Reset{},
+			&handler.Login{},
+			&handler.Answer{},
+			&handler.Language{},
+			&handler.NoAction{},
+		}
+
+		for _, h := range handlers {
+			if h.IsApplicable(update) {
+				h.Handle(bot, update)
+				break
+			}
+		}
 	}
-	_, cancel, err := librus.Login(login, password)
-	if err != nil {
-		fmt.Println(err)
-		return false
-	}
-	cancel()
-	return true
+
+	select {}
 }
 
-func checkNewMessagesPeriodically(bot *tgbotapi.BotAPI) {
+func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 	for {
 		select {
-		case <-time.After(30 * time.Minute):
+		case <-time.After(10000 * time.Second):
 			fmt.Println("Start updating...")
-		case <-updateNow:
+		case <-channel.UpdateNow:
 			fmt.Println("Start force update")
 		}
-		users := getUsersFromDatabase()
+		users := mongo.GetUsersFromDatabase()
 		for _, user := range users {
 			ctx, cancel, err := librus.Login(user.Login, user.Password)
 
@@ -70,7 +86,7 @@ func checkNewMessagesPeriodically(bot *tgbotapi.BotAPI) {
 			}
 			msgs = addUserIdToMessages(msgs, user.TelegramID)
 
-			msgs, err = addMessagesToDatabase(msgs, user.TelegramID)
+			msgs, err = mongo.AddMessagesToDatabase(msgs, user.TelegramID)
 
 			if err != nil {
 				fmt.Println(err)
@@ -93,8 +109,8 @@ func checkNewMessagesPeriodically(bot *tgbotapi.BotAPI) {
 	}
 }
 
-func addUserIdToMessages(msgs []librus.Message, id int64) []librus.Message {
-	var result []librus.Message
+func addUserIdToMessages(msgs []model.Message, id int64) []model.Message {
+	var result []model.Message
 	for _, msg := range msgs {
 		msg.TelegramID = id
 		result = append(result, msg)
@@ -102,7 +118,7 @@ func addUserIdToMessages(msgs []librus.Message, id int64) []librus.Message {
 	return result
 }
 
-func Start() {
+func createBot() *tgbotapi.BotAPI {
 	httpClient := &http.Client{Transport: &http.Transport{
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true,
@@ -117,116 +133,19 @@ func Start() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	go checkNewMessagesPeriodically(bot)
 
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 3
-	updates := bot.GetUpdatesChan(u)
-
-	for update := range updates {
-		if update.Message == nil {
-			continue
-		}
-		fmt.Println("Received message: " + update.Message.Text)
-		if update.Message.Text == "delete_all_messages_"+helper.GetEnv("TELEGRAM_TOKEN", "pass") {
-			_ = deleteAllMessages()
-			msg := tgbotapi.NewMessage(update.Message.Chat.ID, "All messages was deleted")
-			_, err = bot.Send(msg)
-			if err != nil {
-				log.Println(err)
-			}
-			continue
-		}
-		if update.Message.Text == "update_now_"+helper.GetEnv("TELEGRAM_TOKEN", "pass") {
-			updateNow <- struct{}{}
-			continue
-		}
-		if update.Message.Text == "reset" {
-			err = deleteUserByTelegramID(update.Message.Chat.ID)
-			if err != nil {
-				log.Println(err)
-			}
-			msg := tgbotapi.NewMessage(
-				update.Message.Chat.ID,
-				"Все почищено, можно начать все с начала!",
-			)
-			_, err = bot.Send(msg)
-			if err != nil {
-				log.Println(err)
-			}
-			continue
-		}
-		user, _ := findUserByTelegramID(update.Message.Chat.ID)
-		if user != nil {
-			if strings.Contains(update.Message.Text, "lang:") {
-				langParts := strings.Split(update.Message.Text, ":")
-				lang := langParts[1]
-				text := "Язык успешно установлен, теперь все мессаджи будут переводится!"
-				text, err = translator.TranslateText(lang, text)
-				if err != nil {
-					text = "Wrong language '" + lang + "'"
-				} else {
-					err = UpdateUserLanguageByTelegramID(update.Message.Chat.ID, lang)
-					if err != nil {
-						text = "Can't update user language"
-					}
-				}
-				msg := tgbotapi.NewMessage(update.Message.Chat.ID, text)
-				_, err = bot.Send(msg)
-				if err != nil {
-					log.Println(err)
-				}
-				continue
-			}
-			msg := tgbotapi.NewMessage(
-				update.Message.Chat.ID,
-				"Не дрочи бот по чем зря, подписька уже оформлена, для сброса подписьки напиши reset",
-			)
-			_, err = bot.Send(msg)
-			if err != nil {
-				log.Println(err)
-			}
-			continue
-		}
-		loginAndPass := strings.Split(update.Message.Text, ":")
-		var login string
-		var password string
-		if len(loginAndPass) != 2 {
-			login = ""
-			password = ""
-		} else {
-			login = loginAndPass[0]
-			password = loginAndPass[1]
-		}
-
-		authorization(login, password, update, bot)
-	}
-
-	// ждем, пока программа не будет остановлена
-	select {}
+	return bot
 }
 
-func authorization(login string, password string, update tgbotapi.Update, bot *tgbotapi.BotAPI) {
-	if checkLoginAndPassword(login, password) {
+func createUpdateConfig() tgbotapi.UpdateConfig {
+	u := tgbotapi.NewUpdate(0)
+	u.Timeout = 3
+	return u
+}
 
-		user := User{
-			Login:      login,
-			Password:   password,
-			TelegramID: update.Message.Chat.ID,
-		}
-		addUserToDatabase(user)
-
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Вы успешно авторизованы!")
-		_, err := bot.Send(msg)
-		if err != nil {
-			log.Println(err)
-		}
-	} else {
-		// отправляем сообщение о неправильном логине или пароле
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Неправильный логин или пароль!")
-		_, err := bot.Send(msg)
-		if err != nil {
-			log.Println(err)
-		}
+func logReceivedMessage(update tgbotapi.Update) {
+	fmt.Println("Received message: " + update.Message.Text)
+	if update.Message.ReplyToMessage != nil {
+		fmt.Println("ReplyToMessage message: " + update.Message.ReplyToMessage.Text)
 	}
 }
