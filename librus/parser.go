@@ -2,111 +2,21 @@ package librus
 
 import (
 	"context"
-	"crypto/md5"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/chromedp/chromedp"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"librus/helper"
-	"librus/translator"
+	"librus/model"
 	"log"
 	"strings"
 	"time"
 )
 
-type MessageType string
-
-const (
-	MsgTypeMessage      MessageType = "message"
-	MsgTypeNotification MessageType = "notification"
-	MsgTypeNews         MessageType = "news"
-)
-
-type Message struct {
-	Id         string      `bson:"_id"`
-	Type       MessageType `bson:"type"`
-	Link       string      `bson:"link"`
-	Author     string      `bson:"author"`
-	Title      string      `bson:"title"`
-	Content    string      `bson:"content"`
-	Date       time.Time   `bson:"date"`
-	TelegramID int64       `bson:"telegram_id"`
-}
-
-func (message *Message) GenerateId() {
-	stringToHash := ""
-	if message.Type == MsgTypeNotification {
-		stringToHash = message.Title + message.Content + message.Date.Format("2006-01-02")
-	} else if message.Type == MsgTypeMessage {
-		stringToHash = message.Link
-	} else {
-		panic("Wrong message type")
-	}
-	h := md5.New()
-	h.Write([]byte(stringToHash))
-	message.Id = hex.EncodeToString(h.Sum(nil))
-}
-func (message *Message) Translate(lang string) {
-	translation, err := translator.TranslateText(lang, message.Title)
-	if err == nil {
-		message.Title = translation
-	}
-
-	translation, err = translator.TranslateText(lang, message.Content)
-	if err == nil {
-		message.Content = translation
-	}
-
-	translation, err = translator.TranslateText(lang, message.Author)
-	if err == nil {
-		message.Author = translation
-	}
-}
-
-func (message *Message) Send(bot *tgbotapi.BotAPI, telegramId int64) error {
-	msg := tgbotapi.NewMessage(telegramId, "")
-	msg.ParseMode = tgbotapi.ModeHTML
-
-	// Добавляем информацию о типе сообщения
-	var typeIcon string
-	switch message.Type {
-	case MsgTypeMessage:
-		typeIcon = "📩"
-	case MsgTypeNotification:
-		typeIcon = "🔔"
-	default:
-		typeIcon = ""
-	}
-	msg.Text += fmt.Sprintf("%s <b>%s</b>\n\n", typeIcon, message.Title)
-
-	// Добавляем информацию об авторе
-	msg.Text += fmt.Sprintf("👤 <i>От: %s</i>\n\n", message.Author)
-
-	// Добавляем основной текст
-	msg.Text += "📝 " + replaceBrTags(message.Content) + "\n\n"
-
-	// Добавляем дату и время
-	msg.Text += fmt.Sprintf("📅 %s", message.Date.Format("02.01.2006 15:04"))
-	msg.Text += "\n_______________________________"
-
-	// Отправляем сообщение
-	_, err := bot.Send(msg)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func replaceBrTags(s string) string {
-	return strings.ReplaceAll(s, "<br>", "")
-}
-
 func Login(login string, password string) (context.Context, context.CancelFunc, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 
-	headless := true
+	headless := false
 	var actx context.Context
 	if !headless {
 		options := []chromedp.ExecAllocatorOption{
@@ -118,7 +28,6 @@ func Login(login string, password string) (context.Context, context.CancelFunc, 
 		actx, _ = chromedp.NewExecAllocator(ctx, options...)
 	} else {
 		actx, _ = chromedp.NewRemoteAllocator(context.Background(), "ws://surfshark:3000")
-		//actx, _ = chromedp.NewRemoteAllocator(context.Background(), "ws://localhost:3900")
 	}
 	ctx, cancel = chromedp.NewContext(actx)
 
@@ -181,7 +90,32 @@ func logAction(name string) chromedp.Action {
 	})
 }
 
-func GetMessages(ctx context.Context) ([]Message, error) {
+func AnswerMessage(link string, text string, ctx context.Context) error {
+	err := chromedp.Run(ctx, chromedp.Navigate(link),
+		chromedp.WaitVisible(`body`, chromedp.ByQuery),
+		logAction(fmt.Sprintf("Navigation in %s", link)),
+		chromedp.Sleep(2*time.Second),
+		logAction("Click on Odpowiedz"),
+		chromedp.Click(`input[type="button"][value="Odpowiedz"]`, chromedp.ByQuery),
+		chromedp.WaitReady(`#tresc_wiadomosci`, chromedp.ByID),
+		chromedp.Evaluate(`
+        let textarea = document.getElementById('tresc_wiadomosci');
+        let originalText = textarea.value;
+        let newText = '`+text+`';
+        textarea.value = newText + originalText;
+    `, nil),
+		chromedp.Sleep(1*time.Second),
+		logAction("Click on Wyślij"),
+		chromedp.Click(`input[type="submit"][name="wyslij"]`, chromedp.ByQuery),
+		chromedp.Sleep(2*time.Second),
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func GetMessages(ctx context.Context) ([]model.Message, error) {
 	err := chromedp.Run(ctx, chromedp.Navigate(`https://synergia.librus.pl/wiadomosci`),
 		chromedp.WaitVisible(`body`, chromedp.ByQuery),
 		logAction("Навигация на страницу wiadomosci"),
@@ -205,14 +139,16 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 	printLog("Ищем все ссылки в таблице с классом \"decorated\" ...")
 	var links []string
 	//table.decorated td a
-	doc.Find("table.decorated td[style=\"font-weight: bold;\"] a").Each(func(i int, s *goquery.Selection) {
+	itemsSelector := "table.decorated td a"
+	//itemsSelector := "table.decorated td[style=\"font-weight: bold;\"] a"
+	doc.Find(itemsSelector).Each(func(i int, s *goquery.Selection) {
 		href, ok := s.Attr("href")
 		if ok {
 			links = append(links, href)
 		}
 	})
 	printLog("линки готовы!")
-	var messages []Message
+	var messages []model.Message
 	printLog("Spin this shit!")
 	links = removeDuplicates(links)
 	for _, link := range links {
@@ -256,7 +192,7 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 		if err != nil {
 			return nil, err
 		}
-		message := Message{Link: link, Content: content, Date: date, Title: title, Author: author, Type: MsgTypeMessage}
+		message := model.Message{Link: link, Content: content, Date: date, Title: title, Author: author, Type: model.MsgTypeMessage}
 		message.GenerateId()
 		messages = append(messages, message)
 	}
@@ -264,9 +200,9 @@ func GetMessages(ctx context.Context) ([]Message, error) {
 	return messages, nil
 }
 
-func GetNews(ctx context.Context) ([]Message, error) {
+func GetNews(ctx context.Context) ([]model.Message, error) {
 	const url = "https://synergia.librus.pl/ogloszenia"
-	var messages []Message
+	var messages []model.Message
 
 	var html string
 	if err := chromedp.Run(ctx, chromedp.Navigate(url), chromedp.OuterHTML("html", &html)); err != nil {
@@ -282,7 +218,7 @@ func GetNews(ctx context.Context) ([]Message, error) {
 
 	var parseErr error
 	tableNodes.Each(func(i int, tableNode *goquery.Selection) {
-		message := Message{
+		message := model.Message{
 			Type:    "notification",
 			Link:    url,
 			Author:  tableNode.Find("th:contains('Dodał')").Next().Text(),
