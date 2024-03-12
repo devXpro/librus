@@ -47,9 +47,9 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 			if len(msgs) == 0 {
 				continue
 			}
-			msgs = addUserIdToMessages(msgs, user.TelegramID)
+			msgs = addUserIdToMessages(msgs, user.Id)
 
-			msgs, err = mongo.AddMessagesToDatabase(msgs, user.TelegramID)
+			msgs, err = mongo.AddMessagesToDatabase(msgs, user.Id)
 
 			if err != nil {
 				fmt.Println(err)
@@ -63,19 +63,21 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 				if user.Language != "" {
 					message.Translate(user.Language)
 				}
-				err = message.Send(bot, user.TelegramID)
-				if err != nil {
-					fmt.Println(err)
+				for _, id := range user.TelegramIDs {
+					err = message.Send(bot, id)
+					if err != nil {
+						fmt.Println(err)
+					}
 				}
 			}
 		}
 	}
 }
 
-func addUserIdToMessages(msgs []model.Message, id int64) []model.Message {
+func addUserIdToMessages(msgs []model.Message, id string) []model.Message {
 	var result []model.Message
 	for _, msg := range msgs {
-		msg.TelegramID = id
+		msg.UserID = id
 		result = append(result, msg)
 	}
 	return result

@@ -43,7 +43,7 @@ func GetNews(ctx context.Context) ([]model.Message, error) {
 				}
 				return date
 			}(),
-			TelegramID: 0,
+			UserID: "0",
 		}
 		message.GenerateId()
 		messages = append(messages, message)

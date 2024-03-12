@@ -6,15 +6,24 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"librus/model"
 	"librus/mongo/client"
 	"log"
 	"time"
 )
 
-func AddUserToDatabase(user model.User) {
+func AddUserToDatabase(login string, password string, telegramId int64) {
 	collection := client.Db.Collection("user")
-	_, err := collection.InsertOne(context.Background(), user)
+
+	update := bson.M{
+		"$addToSet": bson.M{"telegram_ids": telegramId},
+	}
+	filter := bson.M{"login": login, "password": password, "telegram_ids": bson.M{"$ne": telegramId}}
+
+	opt := options.Update().SetUpsert(true)
+	_, err := collection.UpdateOne(context.Background(), filter, update, opt)
+
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -46,7 +55,7 @@ func GetUsersFromDatabase() []model.User {
 
 func FindUserByTelegramID(telegramID int64) (*model.User, error) {
 	collection := client.Db.Collection("user")
-	filter := bson.M{"telegram_id": telegramID}
+	filter := bson.M{"telegram_ids": telegramID}
 	var user model.User
 	err := collection.FindOne(context.Background(), filter).Decode(&user)
 	if err != nil {
@@ -62,7 +71,7 @@ func UpdateUserLanguageByTelegramID(telegramID int64, language string) error {
 	collection := client.Db.Collection("user")
 	_, err := collection.UpdateOne(
 		context.Background(),
-		bson.M{"telegram_id": telegramID},
+		bson.M{"telegram_ids": telegramID},
 		bson.M{"$set": bson.M{"language": language}},
 	)
 	if err != nil {
@@ -71,14 +80,14 @@ func UpdateUserLanguageByTelegramID(telegramID int64, language string) error {
 	return nil
 }
 
-func AddMessagesToDatabase(messages []model.Message, telegramId int64) ([]model.Message, error) {
+func AddMessagesToDatabase(messages []model.Message, userId string) ([]model.Message, error) {
 	collection := client.Db.Collection("message")
 
 	// Find existing messages
 	existingMessages := make(map[string]bool)
 	cursor, err := collection.Find(
 		context.Background(),
-		bson.M{"_id": bson.M{"$in": getIds(messages)}, "telegram_id": telegramId},
+		bson.M{"_id": bson.M{"$in": getIds(messages)}, "user_id": userId},
 	)
 	if err != nil {
 		return nil, err
@@ -100,14 +109,14 @@ func AddMessagesToDatabase(messages []model.Message, telegramId int64) ([]model.
 		if _, ok := existingMessages[m.Id]; !ok {
 			newMessages = append(newMessages, m)
 			doc := bson.M{
-				"_id":         m.Id,
-				"link":        m.Link,
-				"author":      m.Author,
-				"title":       m.Title,
-				"content":     m.Content,
-				"date":        primitive.NewDateTimeFromTime(m.Date),
-				"telegram_id": m.TelegramID,
-				"type":        m.Type,
+				"_id":     m.Id,
+				"link":    m.Link,
+				"author":  m.Author,
+				"title":   m.Title,
+				"content": m.Content,
+				"date":    primitive.NewDateTimeFromTime(m.Date),
+				"user_id": m.UserID,
+				"type":    m.Type,
 			}
 			bulkOps = append(bulkOps, mongo.NewInsertOneModel().SetDocument(doc))
 		}
@@ -137,7 +146,7 @@ func getIds(messages []model.Message) []string {
 
 func DeleteUserByTelegramID(telegramID int64) error {
 	collection := client.Db.Collection("user")
-	filter := bson.M{"telegram_id": telegramID}
+	filter := bson.M{"telegram_ids": telegramID}
 	_, err := collection.DeleteOne(context.Background(), filter)
 	if err != nil {
 		return err

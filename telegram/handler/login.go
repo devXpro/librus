@@ -3,7 +3,6 @@ package handler
 import (
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"librus/model"
 	"librus/mongo"
 	"librus/parser"
 	"log"
@@ -35,12 +34,7 @@ func (l *Login) Handle(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 func (l *Login) authorization(login string, password string, update tgbotapi.Update, bot *tgbotapi.BotAPI) {
 	if l.checkLoginAndPassword(login, password) {
 
-		user := model.User{
-			Login:      login,
-			Password:   password,
-			TelegramID: update.Message.Chat.ID,
-		}
-		mongo.AddUserToDatabase(user)
+		mongo.AddUserToDatabase(login, password, update.Message.Chat.ID)
 
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "You are authorized successfully")
 		_, err := bot.Send(msg)

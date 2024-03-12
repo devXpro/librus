@@ -7,10 +7,11 @@ import (
 )
 
 type User struct {
-	Login      string `bson:"login"`
-	Password   string `bson:"password"`
-	TelegramID int64  `bson:"telegram_id"`
-	Language   string `bson:"language"`
+	Id          string  `bson:"_id"`
+	Login       string  `bson:"login"`
+	Password    string  `bson:"password"`
+	TelegramIDs []int64 `bson:"telegram_ids"`
+	Language    string  `bson:"language"`
 }
 
 func (user *User) SendTranslatedMessage(bot *tgbotapi.BotAPI, text string, forceLanguage ...string) {
@@ -26,10 +27,11 @@ func (user *User) SendTranslatedMessage(bot *tgbotapi.BotAPI, text string, force
 			return
 		}
 	}
-
-	msg := tgbotapi.NewMessage(user.TelegramID, text)
-	_, err = bot.Send(msg)
-	if err != nil {
-		log.Println(err)
+	for _, id := range user.TelegramIDs {
+		msg := tgbotapi.NewMessage(id, text)
+		_, err = bot.Send(msg)
+		if err != nil {
+			log.Println(err)
+		}
 	}
 }

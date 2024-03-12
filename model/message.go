@@ -19,14 +19,14 @@ const (
 )
 
 type Message struct {
-	Id         string      `bson:"_id"`
-	Type       MessageType `bson:"type"`
-	Link       string      `bson:"link"`
-	Author     string      `bson:"author"`
-	Title      string      `bson:"title"`
-	Content    string      `bson:"content"`
-	Date       time.Time   `bson:"date"`
-	TelegramID int64       `bson:"telegram_id"`
+	Id      string      `bson:"_id"`
+	Type    MessageType `bson:"type"`
+	Link    string      `bson:"link"`
+	Author  string      `bson:"author"`
+	Title   string      `bson:"title"`
+	Content string      `bson:"content"`
+	Date    time.Time   `bson:"date"`
+	UserID  string      `bson:"user_id"`
 }
 
 func (message *Message) GenerateId() {
