@@ -3,15 +3,16 @@ package parser
 import (
 	"context"
 	"fmt"
-	"github.com/chromedp/chromedp"
 	"librus/helper"
 	"log"
+
+	"github.com/chromedp/chromedp"
 )
 
 func logAction(name string) chromedp.Action {
 	return chromedp.ActionFunc(func(ctx context.Context) error {
 		if helper.IsDebug() {
-			log.Printf("Операция: %s", name)
+			log.Printf("Operation: %s", name)
 		}
 		return nil
 	})

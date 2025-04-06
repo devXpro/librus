@@ -3,8 +3,9 @@ package parser
 import (
 	"context"
 	"errors"
-	"github.com/chromedp/chromedp"
 	"time"
+
+	"github.com/chromedp/chromedp"
 )
 
 func Login(login string, password string) (context.Context, context.CancelFunc, error) {
@@ -25,38 +26,38 @@ func Login(login string, password string) (context.Context, context.CancelFunc, 
 	}
 	ctx, cancel = chromedp.NewContext(actx)
 
-	// Операции для авторизации
+	// Operations for authorization
 	ops := []chromedp.Action{
 		chromedp.EmulateViewport(2000, 2000),
 		chromedp.Navigate(`https://portal.librus.pl/rodzina`),
-		logAction("Навигация на страницу https://portal.librus.pl/rodzina"),
+		logAction("Navigating to https://portal.librus.pl/rodzina"),
 		chromedp.WaitVisible(`.modal-button__primary`, chromedp.ByQuery),
-		logAction("Ожидание появления элемента .modal-button__primary"),
+		logAction("Waiting for .modal-button__primary element"),
 		chromedp.Click(`.modal-button__primary`, chromedp.ByQuery),
-		logAction("Нажатие на элемент .modal-button__primary"),
+		logAction("Clicking on .modal-button__primary element"),
 		chromedp.Sleep(3 * time.Second),
-		logAction("Задержка на 3 секунды"),
+		logAction("Delay for 3 seconds"),
 		chromedp.WaitVisible(`a.btn-synergia-top[href="#"]`, chromedp.ByQuery),
-		logAction("Ожидание появления элемента a.btn-synergia-top[href=\"#\"]"),
+		logAction("Waiting for a.btn-synergia-top[href=\"#\"] element"),
 		chromedp.Click(`a[href="#"]`, chromedp.ByQuery),
-		logAction("Нажатие на элемент a[href=\"#\"]"),
+		logAction("Clicking on a[href=\"#\"] element"),
 		chromedp.WaitVisible(`a[href="/rodzina/synergia/loguj"]`, chromedp.ByQuery),
-		logAction("Ожидание появления элемента a[href=\"/rodzina/synergia/loguj\"]"),
+		logAction("Waiting for a[href=\"/rodzina/synergia/loguj\"] element"),
 		chromedp.Click(`a[href="/rodzina/synergia/loguj"]`, chromedp.ByQuery),
-		logAction("Нажатие на элемент a[href=\"/rodzina/synergia/loguj\"]"),
+		logAction("Clicking on a[href=\"/rodzina/synergia/loguj\"] element"),
 		chromedp.Sleep(3 * time.Second),
 		chromedp.Click(`#loginLabel`),
-		logAction("Установка фокуса на логин"),
+		logAction("Setting focus on login field"),
 		chromedp.SendKeys(`#Login`, login),
 		chromedp.Sleep(1 * time.Second),
-		logAction("Ввод логина"),
+		logAction("Entering login"),
 		chromedp.Click(`#passwordLabel`),
-		logAction("Установка фокуса на пароль"),
+		logAction("Setting focus on password field"),
 		chromedp.SendKeys(`#Pass`, password),
 		chromedp.Sleep(1 * time.Second),
-		logAction("Ввод пароля"),
+		logAction("Entering password"),
 		chromedp.Click(`#LoginBtn`),
-		logAction("Нажатие на кнопку входа"),
+		logAction("Clicking login button"),
 		chromedp.Sleep(3 * time.Second),
 	}
 

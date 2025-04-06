@@ -2,13 +2,14 @@ package telegram
 
 import (
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"librus/model"
 	"librus/mongo"
 	"librus/parser"
 	"librus/telegram/channel"
 	"sort"
 	"time"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
@@ -68,6 +69,11 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 					if err != nil {
 						fmt.Println(err)
 					}
+				}
+
+				// Clean up attachments directory after sending to all users
+				if err := message.CleanupAttachments(); err != nil {
+					fmt.Printf("Error cleaning up attachments: %v\n", err)
 				}
 			}
 		}

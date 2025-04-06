@@ -3,11 +3,12 @@ package telegram
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"librus/helper"
 	"librus/telegram/handler"
 	"log"
 	"net/http"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 func Start() {
@@ -28,6 +29,7 @@ func Start() {
 			&handler.Login{},
 			&handler.Answer{},
 			&handler.Language{},
+			&handler.URLMessage{},
 			&handler.NoAction{},
 		}
 
