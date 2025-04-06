@@ -64,6 +64,66 @@ func (message *Message) Translate(lang string) {
 }
 
 func (message *Message) Send(bot *tgbotapi.BotAPI, telegramId int64) error {
+	// Check if there are attachments to prepare
+	var photos []interface{}
+	var videos []interface{}
+	var documents []tgbotapi.FileBytes
+	var fileNames []string
+
+	if message.AttachmentsDir != "" && message.AttachmentsDir != "nil" {
+		// Get list of files in directory
+		files, err := os.ReadDir(message.AttachmentsDir)
+		if err != nil {
+			return fmt.Errorf("error reading attachments directory: %w", err)
+		}
+
+		// Process files and categorize them
+		for _, file := range files {
+			if file.IsDir() {
+				continue // Skip subdirectories
+			}
+
+			filePath := filepath.Join(message.AttachmentsDir, file.Name())
+			fileBytes, err := os.ReadFile(filePath)
+			if err != nil {
+				fmt.Printf("Error reading file %s: %v\n", filePath, err)
+				continue
+			}
+
+			// Determine file type by extension
+			fileExt := strings.ToLower(filepath.Ext(file.Name()))
+			fileNames = append(fileNames, file.Name())
+
+			switch fileExt {
+			case ".jpg", ".jpeg", ".png", ".gif", ".webp":
+				// Add to photos group
+				photos = append(photos, tgbotapi.NewInputMediaPhoto(tgbotapi.FileBytes{
+					Name:  file.Name(),
+					Bytes: fileBytes,
+				}))
+			case ".mp4", ".mov", ".avi", ".mkv":
+				// Add to videos group
+				videos = append(videos, tgbotapi.NewInputMediaVideo(tgbotapi.FileBytes{
+					Name:  file.Name(),
+					Bytes: fileBytes,
+				}))
+			default:
+				// Add to documents list
+				documents = append(documents, tgbotapi.FileBytes{
+					Name:  file.Name(),
+					Bytes: fileBytes,
+				})
+			}
+		}
+	}
+
+	// Prepare message text with attachment info if files exist
+	var attachmentInfo string
+	if len(fileNames) > 0 {
+		attachmentInfo = "\n\n📎 Attachments: " + strings.Join(fileNames, ", ")
+	}
+
+	// Create the text message
 	msg := tgbotapi.NewMessage(telegramId, "")
 	msg.ParseMode = tgbotapi.ModeHTML
 
@@ -87,79 +147,48 @@ func (message *Message) Send(bot *tgbotapi.BotAPI, telegramId int64) error {
 
 	// Add date and time
 	msg.Text += fmt.Sprintf("📅 %s", message.Date.Format("02.01.2006 15:04"))
+
+	// Add attachment info if available
+	msg.Text += attachmentInfo
+
 	msg.Text += "\n_______________________________"
 
-	// Send message
+	// Send text message
 	_, err := bot.Send(msg)
 	if err != nil {
 		return err
 	}
 
-	// Check if there are attachments to send
-	if message.AttachmentsDir != "" && message.AttachmentsDir != "nil" {
-		// Get list of files in directory
-		files, err := os.ReadDir(message.AttachmentsDir)
-		if err != nil {
-			return fmt.Errorf("error reading attachments directory: %w", err)
+	// Send photo group if any
+	if len(photos) > 0 {
+		mediaGroup := tgbotapi.MediaGroupConfig{
+			ChatID: telegramId,
+			Media:  photos,
 		}
+		_, err = bot.SendMediaGroup(mediaGroup)
+		if err != nil {
+			fmt.Printf("Error sending photo group: %v\n", err)
+		}
+	}
 
-		// Send files
-		for _, file := range files {
-			if file.IsDir() {
-				continue // Skip subdirectories
-			}
+	// Send video group if any
+	if len(videos) > 0 {
+		mediaGroup := tgbotapi.MediaGroupConfig{
+			ChatID: telegramId,
+			Media:  videos,
+		}
+		_, err = bot.SendMediaGroup(mediaGroup)
+		if err != nil {
+			fmt.Printf("Error sending video group: %v\n", err)
+		}
+	}
 
-			filePath := filepath.Join(message.AttachmentsDir, file.Name())
-
-			// Create FileBytes with file
-			fileBytes, err := os.ReadFile(filePath)
-			if err != nil {
-				// Log error and continue with other files
-				fmt.Printf("Error reading file %s: %v\n", filePath, err)
-				continue
-			}
-
-			// Determine file type by extension
-			fileExt := strings.ToLower(filepath.Ext(file.Name()))
-
-			// Send file depending on its type
-			var fileMsg tgbotapi.Chattable
-
-			switch fileExt {
-			case ".jpg", ".jpeg", ".png", ".gif", ".webp":
-				// Send as photo
-				photoMsg := tgbotapi.NewPhoto(telegramId, tgbotapi.FileBytes{
-					Name:  file.Name(),
-					Bytes: fileBytes,
-				})
-				photoMsg.Caption = fmt.Sprintf("📎 %s", file.Name())
-				fileMsg = photoMsg
-
-			case ".mp4", ".mov", ".avi", ".mkv":
-				// Send as video
-				videoMsg := tgbotapi.NewVideo(telegramId, tgbotapi.FileBytes{
-					Name:  file.Name(),
-					Bytes: fileBytes,
-				})
-				videoMsg.Caption = fmt.Sprintf("📎 %s", file.Name())
-				fileMsg = videoMsg
-
-			default:
-				// Send as document for all other types
-				docMsg := tgbotapi.NewDocument(telegramId, tgbotapi.FileBytes{
-					Name:  file.Name(),
-					Bytes: fileBytes,
-				})
-				docMsg.Caption = fmt.Sprintf("📎 %s", file.Name())
-				fileMsg = docMsg
-			}
-
-			// Send file
-			_, err = bot.Send(fileMsg)
-			if err != nil {
-				fmt.Printf("Error sending file %s: %v\n", file.Name(), err)
-				// Continue with other files
-			}
+	// Send documents separately if any
+	for _, doc := range documents {
+		docMsg := tgbotapi.NewDocument(telegramId, doc)
+		_, err = bot.Send(docMsg)
+		if err != nil {
+			fmt.Printf("Error sending document %s: %v\n", doc.Name, err)
 		}
 	}
 
