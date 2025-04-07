@@ -22,7 +22,7 @@ services:
       - DEFAULT_STEALTH=1
 
   mongodb:
-    image: mongo:latest
+    image: mongo:4.4.25
     restart: always
     environment:
       - MONGO_DATA_DIR=/data/db
@@ -69,3 +69,4 @@ services:
     restart: unless-stopped
     dns:
       - 1.1.1.1
+      - 8.8.8.8
