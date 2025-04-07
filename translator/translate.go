@@ -1,77 +1,40 @@
 package translator
 
 import (
-	"cloud.google.com/go/translate"
 	"context"
 	"fmt"
-	"golang.org/x/text/language"
 	"librus/mongo/cache"
-	"regexp"
-	"strconv"
-	"strings"
 )
 
+// TranslateText is the main function to translate text with placeholders handling and caching
 func TranslateText(targetLanguage, text string) (string, error) {
-	placeholderPrefix := "NO_TRANSLATE_PLACEHOLDER"
-	var placeholders []string
-	re := regexp.MustCompile(`<nt>([^<]+)</nt>`)
-	textWithPlaceholders := re.ReplaceAllStringFunc(text, func(match string) string {
-		content := re.ReplaceAllString(match, "$1")
-		placeholder := placeholderPrefix + strconv.Itoa(len(placeholders))
-		placeholders = append(placeholders, content)
-		return placeholder
-	})
-	translatedTextWithPlaceholders, err := translateText(targetLanguage, textWithPlaceholders)
-	if err != nil {
-		return text, err
-	}
-
-	return replacePlaceholders(translatedTextWithPlaceholders, placeholders), nil
-}
-
-func replacePlaceholders(text string, placeholders []string) string {
-	for i, placeholder := range placeholders {
-		text = strings.ReplaceAll(text, "NO_TRANSLATE_PLACEHOLDER"+strconv.Itoa(i), placeholder)
-	}
-	return text
-}
-
-func translateText(targetLanguage string, text string) (string, error) {
 	ctx := context.Background()
+	translator := translatorFactory()
+	translatorType := fmt.Sprintf("%T", translator)
 
-	cachedTranslation, err := cache.GetCachedTranslation(targetLanguage, text)
+	// Handle placeholders
+	textWithPlaceholders, placeholders := preprocessText(text)
+
+	// Check cache first
+	cacheKey := generateCacheKey(translatorType, targetLanguage, textWithPlaceholders)
+	cachedTranslation, err := cache.GetCachedTranslationByKey(cacheKey)
 	if err != nil {
-		return "", fmt.Errorf("cache.GetCachedTranslation: %v", err)
+		return "", fmt.Errorf("cache.GetCachedTranslationByKey: %v", err)
 	}
 	if cachedTranslation != "" {
-		return cachedTranslation, nil
+		return replacePlaceholders(cachedTranslation, placeholders), nil
 	}
 
-	lang, err := language.Parse(targetLanguage)
-	if err != nil {
-		return "", fmt.Errorf("language.Parse: %v", err)
-	}
-
-	translateClient, err := translate.NewClient(ctx)
+	// Translate if not in cache
+	translatedText, err := translator.Translate(ctx, textWithPlaceholders, targetLanguage)
 	if err != nil {
 		return "", err
 	}
-	defer translateClient.Close()
 
-	resp, err := translateClient.Translate(ctx, []string{text}, lang, &translate.Options{Format: "text"})
-	if err != nil {
-		return "", fmt.Errorf("translate: %v", err)
-	}
-	if len(resp) == 0 {
-		return "", fmt.Errorf("translate returned empty response to text: %s", text)
+	// Save to cache
+	if err := cache.SetCachedTranslationByKey(cacheKey, translatedText); err != nil {
+		return "", fmt.Errorf("cache.SetCachedTranslationByKey: %v", err)
 	}
 
-	translation := resp[0].Text
-
-	// Save the translation to cache
-	if err := cache.SetCachedTranslation(targetLanguage, text, translation); err != nil {
-		return "", fmt.Errorf("cache.SetCachedTranslation: %v", err)
-	}
-
-	return translation, nil
+	return replacePlaceholders(translatedText, placeholders), nil
 }

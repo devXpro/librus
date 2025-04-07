@@ -13,6 +13,7 @@ services:
       TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
       CHROME_HEADLESS: 1
       GOOGLE_APPLICATION_CREDENTIALS: '/src/creds.json'
+      OPEN_AI_KEY: ${OPEN_AI_KEY}
 
   chrome:
     image: browserless/chrome
