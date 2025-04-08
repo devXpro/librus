@@ -17,6 +17,6 @@ func translatorFactory() Translator {
 
 // generateCacheKey creates a unique key for caching translations
 func generateCacheKey(translatorType, targetLanguage, text string) string {
-	hash := md5.Sum([]byte(translatorType + targetLanguage + text))
+	hash := md5.Sum([]byte("v2" + translatorType + targetLanguage + text))
 	return hex.EncodeToString(hash[:])
 }

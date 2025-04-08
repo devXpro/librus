@@ -56,6 +56,7 @@ func TestGetAndSendSpecificMessage(t *testing.T) {
 	// Print message details for debugging
 	t.Logf("Message Title: %s", message.Title)
 	t.Logf("Message Author: %s", message.Author)
+	t.Logf("Message Content: %s", message.Content)
 	t.Logf("Message Date: %s", message.Date.Format(time.RFC3339))
 	t.Logf("Has Attachments: %v", message.AttachmentsDir != "")
 
@@ -66,6 +67,7 @@ func TestGetAndSendSpecificMessage(t *testing.T) {
 	// Print translated message details
 	t.Logf("Translated Message Title: %s", message.Title)
 	t.Logf("Translated Message Author: %s", message.Author)
+	t.Logf("Translated Message Content: %s", message.Content)
 
 	// Create Telegram bot
 	bot, err := tgbotapi.NewBotAPI(telegramTokenEnv)
