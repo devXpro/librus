@@ -4,6 +4,7 @@ services:
     restart: always
     build: .
     platform: linux/x86_64
+    network_mode: service:surfshark
     logging:
       driver: json-file
       options:
