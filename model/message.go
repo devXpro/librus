@@ -57,7 +57,9 @@ func (message *Message) Translate(lang string) {
 		message.Content = translation
 	}
 
-	translation, err = translator.TranslateText(lang, message.Author)
+	// Prepend "From: " to the author so it gets translated as well
+	authorWithPrefix := "From: " + message.Author
+	translation, err = translator.TranslateText(lang, authorWithPrefix)
 	if err == nil {
 		message.Author = translation
 	}
@@ -117,12 +119,6 @@ func (message *Message) Send(bot *tgbotapi.BotAPI, telegramId int64) error {
 		}
 	}
 
-	// Prepare message text with attachment info if files exist
-	var attachmentInfo string
-	if len(fileNames) > 0 {
-		attachmentInfo = "\n\n📎 Attachments: " + strings.Join(fileNames, ", ")
-	}
-
 	// Create the text message
 	msg := tgbotapi.NewMessage(telegramId, "")
 	msg.ParseMode = tgbotapi.ModeHTML
@@ -137,19 +133,25 @@ func (message *Message) Send(bot *tgbotapi.BotAPI, telegramId int64) error {
 	default:
 		typeIcon = ""
 	}
+
+	// All <nt> tags are already removed during translation, no need to clean them up here
 	msg.Text += fmt.Sprintf("%s <b><a href=\"%s\">%s</a></b>\n\n", typeIcon, message.Link, message.Title)
 
 	// Add information about the author
-	msg.Text += fmt.Sprintf("👤 <i>From: %s</i>\n\n", message.Author)
+	msg.Text += fmt.Sprintf("👤 <i>%s</i>\n\n", message.Author)
 
 	// Add main text
 	msg.Text += "📝 " + replaceBrTags(message.Content) + "\n\n"
 
 	// Add date and time
-	msg.Text += fmt.Sprintf("📅 %s", message.Date.Format("02.01.2006 15:04"))
+	dateTimeStr := fmt.Sprintf("📅 %s", message.Date.Format("02.01.2006 15:04"))
+	msg.Text += dateTimeStr
 
 	// Add attachment info if available
-	msg.Text += attachmentInfo
+	if len(fileNames) > 0 {
+		attachmentText := "Attachments: " + strings.Join(fileNames, ", ")
+		msg.Text += "\n\n📎 " + attachmentText
+	}
 
 	msg.Text += "\n_______________________________"
 

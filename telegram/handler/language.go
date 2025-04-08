@@ -1,11 +1,12 @@
 package handler
 
 import (
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"librus/mongo"
 	"librus/translator"
 	"log"
 	"strings"
+
+	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 type Language struct{}
@@ -20,7 +21,7 @@ func (_ *Language) Handle(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	text := "The language has been successfully set, now all messages will be translated!"
 	text, err := translator.TranslateText(lang, text)
 	if err != nil {
-		text = "Wrong language '" + lang + "'"
+		text = "Wrong language code: '" + lang + "'. Please use standard language codes like 'en', 'uk', 'pl', etc."
 	} else {
 		err = mongo.UpdateUserLanguageByTelegramID(update.Message.Chat.ID, lang)
 		if err != nil {

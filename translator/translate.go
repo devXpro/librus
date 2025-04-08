@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"librus/mongo/cache"
+	"strings"
 )
 
 // TranslateText is the main function to translate text with placeholders handling and caching
@@ -36,5 +37,16 @@ func TranslateText(targetLanguage, text string) (string, error) {
 		return "", fmt.Errorf("cache.SetCachedTranslationByKey: %v", err)
 	}
 
-	return replacePlaceholders(translatedText, placeholders), nil
+	// Replace placeholders with original content
+	translatedWithPlaceholders := replacePlaceholders(translatedText, placeholders)
+
+	// Clean up any remaining <nt> and </nt> tags
+	return cleanupNoTranslateTags(translatedWithPlaceholders), nil
+}
+
+// cleanupNoTranslateTags removes <nt> and </nt> tags from a string
+func cleanupNoTranslateTags(text string) string {
+	text = strings.ReplaceAll(text, "<nt>", "")
+	text = strings.ReplaceAll(text, "</nt>", "")
+	return text
 }

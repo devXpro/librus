@@ -91,6 +91,6 @@ func (u *URLMessage) Handle(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		fmt.Printf("Error cleaning up attachments: %v\n", err)
 	}
 
-	msg = tgbotapi.NewMessage(update.Message.Chat.ID, "Message processed successfully.")
-	bot.Send(msg)
+	// Send translated success message using user.SendTranslatedMessage
+	user.SendTranslatedMessage(bot, "Message processed successfully.")
 }

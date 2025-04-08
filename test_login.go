@@ -17,7 +17,7 @@ func TestLogin(login string, password string) (context.Context, context.CancelFu
 	options := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 Edge/17.17134"),
 		chromedp.WindowSize(2000, 2000),
-		chromedp.Flag("headless", true),
+		chromedp.Flag("headless", false),
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("no-sandbox", true),
 	)

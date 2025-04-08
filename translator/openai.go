@@ -26,8 +26,13 @@ func (c *ChatGPTTranslator) Translate(ctx context.Context, text, targetLanguage 
 				{
 					Role: "system",
 					Content: "You are a professional translator. " +
-						"Translate the text without adding or removing information. " +
-						"Preserve formatting, placeholders, and special markers.",
+						"Translate ABSOLUTELY EVERYTHING in the text to the target language, including ALL names, " +
+						"titles, places, and any other proper nouns. " +
+						"Leave NO words in the original language. " +
+						"The ONLY exception is content between <nt> and </nt> tags, which must remain untouched. " +
+						"Translate personal names and surnames fully into the target language. " +
+						"For example, 'Jan Kowalski' could become 'John Smith' in English or 'Іван Коваль' in Ukrainian. " +
+						"ALL text should look completely native and natural in the target language.",
 				},
 				{
 					Role:    "user",

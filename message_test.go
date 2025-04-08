@@ -59,6 +59,14 @@ func TestGetAndSendSpecificMessage(t *testing.T) {
 	t.Logf("Message Date: %s", message.Date.Format(time.RFC3339))
 	t.Logf("Has Attachments: %v", message.AttachmentsDir != "")
 
+	// Translate the message to Ukrainian before sending
+	t.Log("Translating message to Ukrainian...")
+	message.Translate("uk")
+
+	// Print translated message details
+	t.Logf("Translated Message Title: %s", message.Title)
+	t.Logf("Translated Message Author: %s", message.Author)
+
 	// Create Telegram bot
 	bot, err := tgbotapi.NewBotAPI(telegramTokenEnv)
 	if err != nil {
