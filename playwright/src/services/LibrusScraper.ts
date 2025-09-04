@@ -404,8 +404,8 @@ export class LibrusScraper {
       // Parse date like in Go version: "2006-01-02 15:04:05" format
       const dateTimestamp = this.parseLibrusDate(dateString.trim());
 
-      // TODO: Download attachments if present (like in Go version)
-      const attachmentsDir = '';
+      // Download attachments if present (like in Go version)
+      const attachmentsDir = await this.downloadAttachments(page);
 
       const message: Message = {
         id: this.generateMessageId(messageUrl),
@@ -484,5 +484,288 @@ export class LibrusScraper {
 
     // Fallback to parseDate for simpler formats
     return this.parseDate(dateStr);
+  }
+
+  private async downloadAttachments(page: Page): Promise<string> {
+    try {
+      logger.debug('Looking for download buttons...');
+
+      // Find download buttons (same selector as Go version)
+      const downloadButtons = await page.locator('img[src="/assets/img/homework_files_icons/download.png"]').all();
+
+      if (downloadButtons.length === 0) {
+        logger.debug('No attachments found on this page');
+        return '';
+      }
+
+      logger.debug(`Found ${downloadButtons.length} attachment(s)`);
+
+      // Create UUID directory for attachments
+      const { v4: uuidv4 } = require('uuid');
+      const fs = require('fs');
+      const path = require('path');
+
+      const uuid = uuidv4();
+      const attachmentsDir = path.join('./attachments', uuid);
+
+      // Create directory
+      fs.mkdirSync(attachmentsDir, { recursive: true });
+      logger.debug(`Created attachments directory: ${attachmentsDir}`);
+
+      // Get cookies from page context for HTTP requests
+      const cookies = await page.context().cookies();
+
+      // Process each attachment
+      for (let i = 0; i < downloadButtons.length; i++) {
+        try {
+          logger.debug(`Processing attachment ${i + 1} of ${downloadButtons.length}`);
+
+          // Get onclick attribute value
+          const onclickValue = await downloadButtons[i]?.getAttribute('onclick');
+          if (!onclickValue) {
+            logger.warn(`No onclick attribute for attachment ${i + 1}`);
+            continue;
+          }
+
+          // Extract URL from onclick (same logic as Go version)
+          const relativeURL = this.extractURLFromOnclick(onclickValue);
+          if (!relativeURL) {
+            logger.warn(`Failed to extract URL from onclick for attachment ${i + 1}`);
+            continue;
+          }
+
+          // Construct full URL
+          const fullURL = 'https://synergia.librus.pl' + relativeURL;
+          logger.debug(`Extracted URL: ${fullURL}`);
+
+          // Get redirect URL and download file
+          await this.downloadSingleAttachment(fullURL, cookies, attachmentsDir, i + 1);
+
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          logger.warn(`Failed to process attachment ${i + 1}`, { error: errorMessage });
+          // Continue with other attachments
+        }
+      }
+
+      return uuid; // Return UUID directory name
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to download attachments', { error: errorMessage });
+      return ''; // Return empty string on error
+    }
+  }
+
+  private extractURLFromOnclick(onclick: string): string | null {
+    try {
+      // Looking for otworz_w_nowym_oknie("URL", "o2", 420, 250) - same as Go version
+      const startStr = 'otworz_w_nowym_oknie(';
+      if (!onclick.includes(startStr)) {
+        return null;
+      }
+
+      // Split by the function name
+      const parts = onclick.split(startStr);
+      if (parts.length < 2) {
+        return null;
+      }
+
+      // Get the part after the function name
+      const paramsPart = parts[1]?.trim();
+      if (!paramsPart) {
+        return null;
+      }
+
+      // Try different matching patterns (same as Go version)
+
+      // Pattern 1: Double quotes without HTML entities
+      let match = paramsPart.indexOf('"');
+      if (match >= 0) {
+        const endMatch = paramsPart.indexOf('"', match + 1);
+        if (endMatch >= 0) {
+          let url = paramsPart.substring(match + 1, endMatch);
+          url = url.replace(/\\\//g, '/');
+          return url;
+        }
+      }
+
+      // Pattern 2: HTML entity quotes &quot;
+      match = paramsPart.indexOf('&quot;');
+      if (match >= 0) {
+        const endMatch = paramsPart.indexOf('&quot;', match + 6);
+        if (endMatch >= 0) {
+          let url = paramsPart.substring(match + 6, endMatch);
+          url = url.replace(/\\\//g, '/');
+          return url;
+        }
+      }
+
+      // Pattern 3: Regex for quotes
+      const regexMatch = paramsPart.match(/["']([^"']+)["']/);
+      if (regexMatch && regexMatch[1]) {
+        let url = regexMatch[1];
+        url = url.replace(/\\\//g, '/');
+        return url;
+      }
+
+      // Last resort: Look for URL pattern
+      const fallbackMatch = paramsPart.match(/\/wiadomosci\/pobierz_zalacznik\/\d+\/\d+/);
+      if (fallbackMatch && fallbackMatch[0]) {
+        return fallbackMatch[0];
+      }
+
+      return null;
+
+    } catch (error) {
+      logger.warn('Error extracting URL from onclick', { onclick, error });
+      return null;
+    }
+  }
+
+  private async downloadSingleAttachment(
+    url: string,
+    cookies: any[],
+    targetDir: string,
+    index: number
+  ): Promise<void> {
+    try {
+      const axios = require('axios');
+      const fs = require('fs');
+      const path = require('path');
+
+      // Filter cookies by domain (same logic as Go version)
+      const relevantCookies = cookies.filter(cookie => {
+        // Only add cookies that are relevant for the domain we're requesting
+        if (url.includes(cookie.domain)) {
+          return true;
+        }
+
+        // Try to check by hostname
+        try {
+          const parsedURL = new URL(url);
+          if (cookie.domain.includes(parsedURL.hostname)) {
+            return true;
+          }
+        } catch (error) {
+          // Ignore URL parsing errors
+        }
+
+        return false;
+      });
+
+      // Convert filtered cookies to cookie string
+      const cookieString = relevantCookies
+        .map(cookie => `${cookie.name}=${cookie.value}`)
+        .join('; ');
+
+      logger.debug(`Using ${relevantCookies.length} relevant cookies out of ${cookies.length} total`);
+
+      // Get redirect URL (same logic as Go version)
+      let redirectResponse;
+      try {
+        redirectResponse = await axios.get(url, {
+          headers: {
+            'Cookie': cookieString,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 Edge/17.17134',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+          },
+          maxRedirects: 0,
+          validateStatus: () => true // Accept all status codes
+        });
+      } catch (error: any) {
+        // Handle axios errors (like redirect errors)
+        if (error.response) {
+          redirectResponse = error.response;
+        } else {
+          throw error;
+        }
+      }
+
+      // Check if we got a redirect status code (same as Go version)
+      if (redirectResponse.status !== 302 && // StatusFound
+          redirectResponse.status !== 301 && // StatusMovedPermanently
+          redirectResponse.status !== 307 && // StatusTemporaryRedirect
+          redirectResponse.status !== 308) { // StatusPermanentRedirect
+        logger.warn(`Expected redirect, got status code: ${redirectResponse.status}`);
+
+        // Log response body for debugging
+        if (redirectResponse.data && typeof redirectResponse.data === 'string') {
+          logger.warn('Response body:', redirectResponse.data.substring(0, 500));
+        }
+
+        throw new Error(`Expected redirect, got status code: ${redirectResponse.status}`);
+      }
+
+      // Get Location header
+      const location = redirectResponse.headers.location;
+      if (!location) {
+        logger.warn(`No Location header in response. Status: ${redirectResponse.status}, Headers:`, redirectResponse.headers);
+
+        // Log response body for debugging
+        if (redirectResponse.data && typeof redirectResponse.data === 'string') {
+          logger.warn('Response body:', redirectResponse.data.substring(0, 500));
+        }
+
+        throw new Error(`No Location header in response. Status: ${redirectResponse.status}`);
+      }
+
+      // Construct absolute URL if needed
+      let redirectURL = location;
+      if (!location.startsWith('http')) {
+        const baseURL = new URL(url);
+        redirectURL = new URL(location, baseURL.origin).toString();
+      }
+
+      // Add /get to the URL (same as Go version)
+      const downloadURL = redirectURL + '/get';
+      logger.debug(`Download URL: ${downloadURL}`);
+
+      // Download the file
+      const fileResponse = await axios.get(downloadURL, {
+        headers: {
+          'Cookie': cookieString,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        },
+        responseType: 'stream'
+      });
+
+      // Get filename from Content-Disposition header or generate one
+      let filename = '';
+      const contentDisposition = fileResponse.headers['content-disposition'];
+      if (contentDisposition && contentDisposition.includes('filename=')) {
+        const parts = contentDisposition.split('filename=');
+        if (parts.length > 1) {
+          filename = parts[1]?.replace(/['"]/g, '') || '';
+        }
+      }
+
+      // Generate filename if not found
+      if (!filename) {
+        const urlParts = downloadURL.split('/');
+        const tokenPart = urlParts[urlParts.length - 2] || 'unknown';
+        filename = `attachment_${index}_${tokenPart}`;
+      }
+
+      // Clean filename
+      filename = path.basename(filename);
+      const filePath = path.join(targetDir, filename);
+
+      // Save file
+      const writer = fs.createWriteStream(filePath);
+      fileResponse.data.pipe(writer);
+
+      await new Promise((resolve, reject) => {
+        writer.on('finish', resolve);
+        writer.on('error', reject);
+      });
+
+      logger.debug(`Successfully downloaded attachment ${index} to ${filePath}`);
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.warn(`Failed to download attachment ${index}`, { url, error: errorMessage });
+      throw error;
+    }
   }
 }
