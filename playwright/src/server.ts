@@ -58,16 +58,12 @@ class LibrusScraperService {
       this.browser = await chromium.launch({
         headless,
         args: isDevelopment ? [
-          // Minimal args for local development
           '--disable-web-security'
         ] : [
-          // Full args for production/Docker
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
           '--disable-web-security',
-          '--disable-features=VizDisplayCompositor'
+          '--disable-gpu',
+          '--no-sandbox',
+          '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 Edge/17.17134'
         ]
       });
 

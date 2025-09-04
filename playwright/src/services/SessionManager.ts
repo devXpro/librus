@@ -47,7 +47,11 @@ export class SessionManager {
       const storageState = JSON.parse(sessionData);
 
       logger.debug('Attempting to restore session from file', { userId });
-      const context = await this.browser.newContext({ storageState });
+      const context = await this.browser.newContext({
+        storageState,
+        viewport: { width: 2000, height: 2000 },
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 Edge/17.17134'
+      });
 
       if (await this.validateSession(context)) {
         logger.info('Successfully restored ephemeral session from file', { userId });
@@ -71,7 +75,12 @@ export class SessionManager {
     credentials: LoginCredentials
   ): Promise<BrowserContext> {
     const userId = credentials.login;
-    const context = await this.browser.newContext();
+
+    // Create context with viewport size like in Go scraper
+    const context = await this.browser.newContext({
+      viewport: { width: 2000, height: 2000 },
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 Edge/17.17134'
+    });
 
     try {
       await this.performLogin(context, credentials);
