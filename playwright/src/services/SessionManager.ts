@@ -1,14 +1,8 @@
 import { BrowserContext, Browser } from 'playwright';
 import { promises as fs } from 'fs';
 import path from 'path';
-// Simple interfaces (not from protobuf)
-interface SessionInfo {
-  userId: string;
-  context: import('playwright').BrowserContext;
-  lastUsed: Date;
-  isValid: boolean;
-}
 
+// Simple interfaces (not from protobuf)
 interface LoginCredentials {
   login: string;
   password: string;
@@ -16,7 +10,6 @@ interface LoginCredentials {
 import { logger } from '../utils/logger';
 
 export class SessionManager {
-  private activeSessions = new Map<string, BrowserContext>();
   private sessionsDir = './sessions';
   private browser: Browser;
 
@@ -37,39 +30,27 @@ export class SessionManager {
     return path.join(this.sessionsDir, `${userId}.json`);
   }
 
-  async getOrCreateSession(
+  /**
+   * Creates an ephemeral session that should be closed after use
+   * Session state is restored from file if available and valid
+   */
+  async getEphemeralSession(
     credentials: LoginCredentials
   ): Promise<BrowserContext> {
-    const userId = credentials.login; // Use login as unique identifier
-    logger.debug('Getting or creating session', { userId });
-
-    // Check if we have an active session
-    if (this.activeSessions.has(userId)) {
-      const context = this.activeSessions.get(userId)!;
-      
-      // Validate session is still working
-      if (await this.validateSession(context)) {
-        logger.debug('Using existing active session', { userId });
-        return context;
-      } else {
-        logger.info('Active session is invalid, removing', { userId });
-        await context.close();
-        this.activeSessions.delete(userId);
-      }
-    }
+    const userId = credentials.login;
+    logger.debug('Creating ephemeral session', { userId });
 
     // Try to restore from file
     const sessionFile = this.getSessionFilePath(userId);
     try {
       const sessionData = await fs.readFile(sessionFile, 'utf-8');
       const storageState = JSON.parse(sessionData);
-      
+
       logger.debug('Attempting to restore session from file', { userId });
       const context = await this.browser.newContext({ storageState });
-      
+
       if (await this.validateSession(context)) {
-        logger.info('Successfully restored session from file', { userId });
-        this.activeSessions.set(userId, context);
+        logger.info('Successfully restored ephemeral session from file', { userId });
         return context;
       } else {
         logger.info('Restored session is invalid, creating new one', { userId });
@@ -82,34 +63,54 @@ export class SessionManager {
     }
 
     // Create new session
-    logger.info('Creating new session', { userId });
-    return await this.createNewSession(credentials);
+    logger.info('Creating new ephemeral session', { userId });
+    return await this.createEphemeralSession(credentials);
   }
 
-  private async createNewSession(
+  private async createEphemeralSession(
     credentials: LoginCredentials
   ): Promise<BrowserContext> {
     const userId = credentials.login;
     const context = await this.browser.newContext();
-    
+
     try {
       await this.performLogin(context, credentials);
-      
-      // Save session state
-      const storageState = await context.storageState();
-      const sessionFile = this.getSessionFilePath(userId);
-      await fs.writeFile(sessionFile, JSON.stringify(storageState, null, 2));
-      
-      this.activeSessions.set(userId, context);
-      logger.info('Successfully created and saved new session', { userId });
-      
+
+      // Save session state immediately after login
+      await this.saveSessionState(context, userId);
+
+      logger.info('Successfully created ephemeral session', { userId });
       return context;
     } catch (error) {
       await context.close();
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      logger.error('Failed to create new session', { userId, error: errorMessage });
+      logger.error('Failed to create ephemeral session', { userId, error: errorMessage });
       throw error;
     }
+  }
+
+  /**
+   * Saves session state and closes the context
+   * Should be called after each operation to free memory
+   */
+  async saveAndCloseSession(context: BrowserContext, userId: string): Promise<void> {
+    try {
+      await this.saveSessionState(context, userId);
+      logger.debug('Saved session state to file', { userId });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('Failed to save session state', { userId, error: errorMessage });
+    } finally {
+      // Always close context to free memory
+      await context.close();
+      logger.debug('Closed ephemeral session', { userId });
+    }
+  }
+
+  private async saveSessionState(context: BrowserContext, userId: string): Promise<void> {
+    const storageState = await context.storageState();
+    const sessionFile = this.getSessionFilePath(userId);
+    await fs.writeFile(sessionFile, JSON.stringify(storageState, null, 2));
   }
 
   private async performLogin(
@@ -143,18 +144,24 @@ export class SessionManager {
       await page.getByRole('link', { name: ' Zaloguj' }).click();
       logger.trace('Clicked Zaloguj');
 
-      // Wait for login form in iframe
+      // Wait for login iframe to appear and load
+      await page.locator('#caLoginIframe').waitFor({ timeout: 10000 });
+      logger.trace('Login iframe appeared');
+
       const iframe = page.locator('#caLoginIframe').contentFrame();
-      
-      // Fill login
+
+      // Wait for login form fields to be available in iframe
+      await iframe.getByRole('textbox', { name: 'Login' }).waitFor({ timeout: 10000 });
       await iframe.getByRole('textbox', { name: 'Login' }).fill(credentials.login);
       logger.trace('Filled login');
 
-      // Fill password
+      // Wait for password field and fill it
+      await iframe.getByRole('textbox', { name: 'Hasło' }).waitFor({ timeout: 5000 });
       await iframe.getByRole('textbox', { name: 'Hasło' }).fill(credentials.password);
       logger.trace('Filled password');
 
-      // Click login button
+      // Wait for login button and click it
+      await iframe.getByRole('button', { name: 'Zaloguj' }).waitFor({ timeout: 5000 });
       await iframe.getByRole('button', { name: 'Zaloguj' }).click();
       logger.trace('Clicked login button');
 
@@ -212,15 +219,12 @@ export class SessionManager {
     }
   }
 
-  async closeSession(login: string): Promise<void> {
+  /**
+   * Removes session file for a user (logout)
+   */
+  async removeSession(login: string): Promise<void> {
     const userId = login;
-    logger.debug('Closing session', { userId });
-    
-    const context = this.activeSessions.get(userId);
-    if (context) {
-      await context.close();
-      this.activeSessions.delete(userId);
-    }
+    logger.debug('Removing session', { userId });
 
     // Remove session file
     const sessionFile = this.getSessionFilePath(userId);
@@ -233,19 +237,13 @@ export class SessionManager {
     }
   }
 
-  async closeAllSessions(): Promise<void> {
-    logger.info('Closing all sessions');
-    
-    for (const [userId, context] of this.activeSessions) {
-      try {
-        await context.close();
-        logger.debug('Closed session', { userId });
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        logger.error('Failed to close session', { userId, error: errorMessage });
-      }
-    }
-    
-    this.activeSessions.clear();
+  /**
+   * Cleanup method for graceful shutdown
+   * Since we don't keep active sessions in memory, this just cleans up session files if needed
+   */
+  async cleanup(): Promise<void> {
+    logger.info('SessionManager cleanup - no active sessions to close');
+    // In ephemeral mode, we don't have active sessions to close
+    // Session files remain for future use
   }
 }

@@ -24,24 +24,29 @@ export class LibrusScraper {
   ): Promise<Message[]> {
     logger.info('Getting messages', { login: credentials.login });
 
-    const context = await this.sessionManager.getOrCreateSession(credentials);
-    const page = await context.newPage();
+    const context = await this.sessionManager.getEphemeralSession(credentials);
 
     try {
-      await page.goto('https://synergia.librus.pl/wiadomosci');
-      logger.debug('Navigated to messages page');
+      const page = await context.newPage();
+      try {
+        await page.goto('https://synergia.librus.pl/wiadomosci');
+        logger.debug('Navigated to messages page');
 
-      // Wait for page to fully load before scraping
-      await page.waitForLoadState('networkidle');
-      await page.waitForSelector('table.decorated', { timeout: 10000 });
+        // Wait for page to fully load before scraping
+        await page.waitForLoadState('networkidle');
+        await page.waitForSelector('table.decorated', { timeout: 10000 });
 
-      const messages = await this.scrapeMessages(page);
-      logger.info('Successfully scraped messages', { login: credentials.login, count: messages.length });
+        const messages = await this.scrapeMessages(page);
+        logger.info('Successfully scraped messages', { login: credentials.login, count: messages.length });
 
-      return messages;
+        return messages;
 
+      } finally {
+        await page.close();
+      }
     } finally {
-      await page.close();
+      // Save session state and close context to free memory
+      await this.sessionManager.saveAndCloseSession(context, credentials.login);
     }
   }
 
@@ -50,24 +55,29 @@ export class LibrusScraper {
   ): Promise<Message[]> {
     logger.info('Getting news', { login: credentials.login });
 
-    const context = await this.sessionManager.getOrCreateSession(credentials);
-    const page = await context.newPage();
+    const context = await this.sessionManager.getEphemeralSession(credentials);
 
     try {
-      await page.goto('https://synergia.librus.pl/ogloszenia');
-      logger.debug('Navigated to news page');
+      const page = await context.newPage();
+      try {
+        await page.goto('https://synergia.librus.pl/ogloszenia');
+        logger.debug('Navigated to news page');
 
-      // Wait for page to fully load before scraping
-      await page.waitForLoadState('networkidle');
-      await page.waitForSelector('table', { timeout: 10000 });
+        // Wait for page to fully load before scraping
+        await page.waitForLoadState('networkidle');
+        await page.waitForSelector('table', { timeout: 10000 });
 
-      const news = await this.scrapeNews(page);
-      logger.info('Successfully scraped news', { login: credentials.login, count: news.length });
+        const news = await this.scrapeNews(page);
+        logger.info('Successfully scraped news', { login: credentials.login, count: news.length });
 
-      return news;
+        return news;
 
+      } finally {
+        await page.close();
+      }
     } finally {
-      await page.close();
+      // Save session state and close context to free memory
+      await this.sessionManager.saveAndCloseSession(context, credentials.login);
     }
   }
 
@@ -76,15 +86,50 @@ export class LibrusScraper {
   ): Promise<{ messages: Message[], news: Message[] }> {
     logger.info('Getting all updates', { login: credentials.login });
 
-    const [messages, news] = await Promise.all([
-      this.getMessages(credentials),
-      this.getNews(credentials)
-    ]);
+    const context = await this.sessionManager.getEphemeralSession(credentials);
 
-    return {
-      messages,
-      news
-    };
+    try {
+      // Get both messages and news using the same context for efficiency
+      const messagesPromise = this.scrapeMessagesWithContext(context);
+      const newsPromise = this.scrapeNewsWithContext(context);
+
+      const [messages, news] = await Promise.all([messagesPromise, newsPromise]);
+
+      logger.info('Successfully got all updates', {
+        login: credentials.login,
+        messagesCount: messages.length,
+        newsCount: news.length
+      });
+
+      return { messages, news };
+    } finally {
+      // Save session state and close context to free memory
+      await this.sessionManager.saveAndCloseSession(context, credentials.login);
+    }
+  }
+
+  private async scrapeMessagesWithContext(context: BrowserContext): Promise<Message[]> {
+    const page = await context.newPage();
+    try {
+      await page.goto('https://synergia.librus.pl/wiadomosci');
+      await page.waitForLoadState('networkidle');
+      await page.waitForSelector('table.decorated', { timeout: 10000 });
+      return await this.scrapeMessages(page);
+    } finally {
+      await page.close();
+    }
+  }
+
+  private async scrapeNewsWithContext(context: BrowserContext): Promise<Message[]> {
+    const page = await context.newPage();
+    try {
+      await page.goto('https://synergia.librus.pl/ogloszenia');
+      await page.waitForLoadState('networkidle');
+      await page.waitForSelector('table', { timeout: 10000 });
+      return await this.scrapeNews(page);
+    } finally {
+      await page.close();
+    }
   }
 
   async getSingleMessage(
@@ -93,10 +138,10 @@ export class LibrusScraper {
   ): Promise<Message | null> {
     logger.info('Getting single message', { login: credentials.login, messageUrl });
 
-    try {
-      const context = await this.sessionManager.getOrCreateSession(credentials);
-      const page = await context.newPage();
+    const context = await this.sessionManager.getEphemeralSession(credentials);
 
+    try {
+      const page = await context.newPage();
       try {
         await page.goto(messageUrl);
         logger.debug('Navigated to message page');
@@ -114,6 +159,9 @@ export class LibrusScraper {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Failed to get single message', { login: credentials.login, messageUrl, error: errorMessage });
       return null;
+    } finally {
+      // Save session state and close context to free memory
+      await this.sessionManager.saveAndCloseSession(context, credentials.login);
     }
   }
 
@@ -124,33 +172,38 @@ export class LibrusScraper {
   ): Promise<void> {
     logger.info('Answering message', { login: credentials.login, messageUrl });
 
-    const context = await this.sessionManager.getOrCreateSession(credentials);
-    const page = await context.newPage();
+    const context = await this.sessionManager.getEphemeralSession(credentials);
 
     try {
-      await page.goto(messageUrl);
-      logger.debug('Navigated to message page');
+      const page = await context.newPage();
+      try {
+        await page.goto(messageUrl);
+        logger.debug('Navigated to message page');
 
-      // Click "Odpowiedz" button
-      await page.getByRole('button', { name: 'Odpowiedz' }).click();
-      logger.debug('Clicked reply button');
+        // Click "Odpowiedz" button
+        await page.getByRole('button', { name: 'Odpowiedz' }).click();
+        logger.debug('Clicked reply button');
 
-      // Fill the answer text
-      const textArea = page.locator('#tresc_wiadomosci');
-      await textArea.fill(answerText + '\n\n');
-      logger.debug('Filled answer text');
+        // Fill the answer text
+        const textArea = page.locator('#tresc_wiadomosci');
+        await textArea.fill(answerText + '\n\n');
+        logger.debug('Filled answer text');
 
-      // Click "Wyślij" button
-      await page.getByRole('button', { name: 'Wyślij' }).click();
-      logger.debug('Clicked send button');
+        // Click "Wyślij" button
+        await page.getByRole('button', { name: 'Wyślij' }).click();
+        logger.debug('Clicked send button');
 
-      // Wait for success (page navigation or success message)
-      await page.waitForTimeout(2000);
+        // Wait for success (page navigation or success message)
+        await page.waitForTimeout(2000);
 
-      logger.info('Successfully answered message', { login: credentials.login, messageUrl });
+        logger.info('Successfully answered message', { login: credentials.login, messageUrl });
 
+      } finally {
+        await page.close();
+      }
     } finally {
-      await page.close();
+      // Save session state and close context to free memory
+      await this.sessionManager.saveAndCloseSession(context, credentials.login);
     }
   }
 

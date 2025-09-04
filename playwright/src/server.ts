@@ -1,6 +1,6 @@
 import { createServer } from 'nice-grpc';
 import { ServerReflectionService, ServerReflection } from 'nice-grpc-server-reflection';
-import { Status } from 'nice-grpc-common';
+import { Status, ServerError } from 'nice-grpc-common';
 import * as fs from 'fs';
 import * as path from 'path';
 import { chromium, Browser } from 'playwright';
@@ -34,6 +34,12 @@ class LibrusScraperService {
   private browser: Browser | null = null;
   private sessionManager: SessionManager | null = null;
   private scraper: LibrusScraper | null = null;
+
+  private isAuthenticationError(errorMessage: string): boolean {
+    return errorMessage.includes('authentication') ||
+           errorMessage.includes('login') ||
+           errorMessage.includes('Invalid login credentials');
+  }
 
   async initialize(): Promise<void> {
     logger.info('Initializing Librus Scraper Service');
@@ -79,7 +85,7 @@ class LibrusScraperService {
     logger.info('Shutting down service');
 
     if (this.sessionManager) {
-      await this.sessionManager.closeAllSessions();
+      await this.sessionManager.cleanup();
     }
 
     if (this.browser) {
@@ -96,9 +102,7 @@ class LibrusScraperService {
     logger.info('gRPC: GetMessages called', { login });
 
     if (!this.scraper) {
-      const error = new Error('Service not initialized');
-      (error as any).code = Status.INTERNAL;
-      throw error;
+      throw new ServerError(Status.INTERNAL, 'Service not initialized');
     }
 
     try {
@@ -113,15 +117,11 @@ class LibrusScraperService {
       logger.error('gRPC: GetMessages failed', { login, error: errorMessage });
 
       // Determine appropriate gRPC status code
-      if (errorMessage.includes('authentication') || errorMessage.includes('login')) {
-        const grpcError = new Error('Authentication failed');
-        (grpcError as any).code = Status.UNAUTHENTICATED;
-        throw grpcError;
+      if (this.isAuthenticationError(errorMessage)) {
+        throw new ServerError(Status.UNAUTHENTICATED, 'Authentication failed');
       }
 
-      const grpcError = new Error(errorMessage);
-      (grpcError as any).code = Status.INTERNAL;
-      throw grpcError;
+      throw new ServerError(Status.INTERNAL, errorMessage);
     }
   }
 
@@ -131,9 +131,7 @@ class LibrusScraperService {
     logger.info('gRPC: GetNews called', { login });
 
     if (!this.scraper) {
-      const error = new Error('Service not initialized');
-      (error as any).code = Status.INTERNAL;
-      throw error;
+      throw new ServerError(Status.INTERNAL, 'Service not initialized');
     }
 
     try {
@@ -147,15 +145,11 @@ class LibrusScraperService {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       logger.error('gRPC: GetNews failed', { login, error: errorMessage });
 
-      if (errorMessage.includes('authentication') || errorMessage.includes('login')) {
-        const grpcError = new Error('Authentication failed');
-        (grpcError as any).code = Status.UNAUTHENTICATED;
-        throw grpcError;
+      if (this.isAuthenticationError(errorMessage)) {
+        throw new ServerError(Status.UNAUTHENTICATED, 'Authentication failed');
       }
 
-      const grpcError = new Error(errorMessage);
-      (grpcError as any).code = Status.INTERNAL;
-      throw grpcError;
+      throw new ServerError(Status.INTERNAL, errorMessage);
     }
   }
 
@@ -165,9 +159,7 @@ class LibrusScraperService {
     logger.info('gRPC: GetAllUpdates called', { login });
 
     if (!this.scraper) {
-      const error = new Error('Service not initialized');
-      (error as any).code = Status.INTERNAL;
-      throw error;
+      throw new ServerError(Status.INTERNAL, 'Service not initialized');
     }
 
     try {
@@ -182,15 +174,11 @@ class LibrusScraperService {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       logger.error('gRPC: GetAllUpdates failed', { login, error: errorMessage });
 
-      if (errorMessage.includes('authentication') || errorMessage.includes('login')) {
-        const grpcError = new Error('Authentication failed');
-        (grpcError as any).code = Status.UNAUTHENTICATED;
-        throw grpcError;
+      if (this.isAuthenticationError(errorMessage)) {
+        throw new ServerError(Status.UNAUTHENTICATED, 'Authentication failed');
       }
 
-      const grpcError = new Error(errorMessage);
-      (grpcError as any).code = Status.INTERNAL;
-      throw grpcError;
+      throw new ServerError(Status.INTERNAL, errorMessage);
     }
   }
 
@@ -200,18 +188,14 @@ class LibrusScraperService {
     logger.info('gRPC: GetSingleMessage called', { login, messageUrl });
 
     if (!this.scraper) {
-      const error = new Error('Service not initialized');
-      (error as any).code = Status.INTERNAL;
-      throw error;
+      throw new ServerError(Status.INTERNAL, 'Service not initialized');
     }
 
     try {
       const message = await this.scraper.getSingleMessage({ login, password }, messageUrl);
 
       if (!message) {
-        const error = new Error('Message not found');
-        (error as any).code = Status.NOT_FOUND;
-        throw error;
+        throw new ServerError(Status.NOT_FOUND, 'Message not found');
       }
 
       return {
@@ -223,20 +207,14 @@ class LibrusScraperService {
       logger.error('gRPC: GetSingleMessage failed', { login, messageUrl, error: errorMessage });
 
       if (errorMessage.includes('not found')) {
-        const grpcError = new Error('Message not found');
-        (grpcError as any).code = Status.NOT_FOUND;
-        throw grpcError;
+        throw new ServerError(Status.NOT_FOUND, 'Message not found');
       }
 
-      if (errorMessage.includes('authentication') || errorMessage.includes('login')) {
-        const grpcError = new Error('Authentication failed');
-        (grpcError as any).code = Status.UNAUTHENTICATED;
-        throw grpcError;
+      if (this.isAuthenticationError(errorMessage)) {
+        throw new ServerError(Status.UNAUTHENTICATED, 'Authentication failed');
       }
 
-      const grpcError = new Error(errorMessage);
-      (grpcError as any).code = Status.INTERNAL;
-      throw grpcError;
+      throw new ServerError(Status.INTERNAL, errorMessage);
     }
   }
 
@@ -246,9 +224,7 @@ class LibrusScraperService {
     logger.info('gRPC: AnswerMessage called', { login, messageUrl });
 
     if (!this.scraper) {
-      const error = new Error('Service not initialized');
-      (error as any).code = Status.INTERNAL;
-      throw error;
+      throw new ServerError(Status.INTERNAL, 'Service not initialized');
     }
 
     try {
@@ -261,15 +237,11 @@ class LibrusScraperService {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       logger.error('gRPC: AnswerMessage failed', { login, messageUrl, error: errorMessage });
 
-      if (errorMessage.includes('authentication') || errorMessage.includes('login')) {
-        const grpcError = new Error('Authentication failed');
-        (grpcError as any).code = Status.UNAUTHENTICATED;
-        throw grpcError;
+      if (this.isAuthenticationError(errorMessage)) {
+        throw new ServerError(Status.UNAUTHENTICATED, 'Authentication failed');
       }
 
-      const grpcError = new Error(errorMessage);
-      (grpcError as any).code = Status.INTERNAL;
-      throw grpcError;
+      throw new ServerError(Status.INTERNAL, errorMessage);
     }
   }
 
