@@ -1,0 +1,103 @@
+syntax = "proto3";
+
+package librus_scraper;
+
+option go_package = "librus/proto/librus_scraper";
+
+// Main scraper service
+service LibrusScraper {
+  // Message operations (authentication handled internally)
+  rpc GetMessages(GetMessagesRequest) returns (GetMessagesResponse);
+  rpc GetSingleMessage(GetSingleMessageRequest) returns (GetSingleMessageResponse);
+  rpc AnswerMessage(AnswerMessageRequest) returns (AnswerMessageResponse);
+
+  // News/announcements operations
+  rpc GetNews(GetNewsRequest) returns (GetNewsResponse);
+
+  // Combined operations (messages + news in one call)
+  rpc GetAllUpdates(GetAllUpdatesRequest) returns (GetAllUpdatesResponse);
+
+  // Health check
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// Health check
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  bool healthy = 1;
+  string status = 2;
+}
+
+// Message operations
+message GetMessagesRequest {
+  string login = 1;      // unique identifier and for session creation/restoration
+  string password = 2;   // for session creation/restoration
+}
+
+message GetMessagesResponse {
+  repeated Message messages = 1;
+}
+
+message GetSingleMessageRequest {
+  string login = 1;
+  string password = 2;
+  string message_url = 3;
+}
+
+message GetSingleMessageResponse {
+  Message message = 1;
+}
+
+message AnswerMessageRequest {
+  string login = 1;
+  string password = 2;
+  string message_url = 3;
+  string answer_text = 4;
+}
+
+message AnswerMessageResponse {
+  // Empty response - success indicated by lack of gRPC error
+}
+
+// News operations
+message GetNewsRequest {
+  string login = 1;
+  string password = 2;
+}
+
+message GetNewsResponse {
+  repeated Message news = 1;
+}
+
+// Combined operations
+message GetAllUpdatesRequest {
+  string login = 1;
+  string password = 2;
+}
+
+message GetAllUpdatesResponse {
+  repeated Message messages = 1;      // Personal messages
+  repeated Message news = 2;          // News/announcements
+}
+
+
+
+// Data models
+message Message {
+  string id = 1;
+  MessageType type = 2;
+  string link = 3;
+  string author = 4;
+  string title = 5;
+  string content = 6;
+  int64 date_timestamp = 7; // Unix timestamp
+  string attachments_dir = 8; // Path to directory with attachments (like in Go model)
+}
+
+enum MessageType {
+  MESSAGE_TYPE_UNSPECIFIED = 0;
+  MESSAGE_TYPE_MESSAGE = 1;        // Personal messages from /wiadomosci
+  MESSAGE_TYPE_NOTIFICATION = 2;   // News/announcements from /ogloszenia
+  MESSAGE_TYPE_NEWS = 3;           // Reserved for future use
+}

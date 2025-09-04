@@ -1,0 +1,29 @@
+# Use minimal Node.js base image
+FROM node:22-bookworm
+
+# Create app directory
+WORKDIR /app
+
+# Copy package files
+COPY playwright/package*.json ./
+
+# Install all dependencies (including devDependencies for build)
+RUN npm ci
+
+# Install Playwright browsers with system dependencies (uses local playwright version)
+RUN npx playwright install --with-deps
+
+# Copy playwright source code (including pre-generated proto files)
+COPY playwright ./
+
+# Build TypeScript
+RUN npm run build
+
+# Create sessions directory
+RUN mkdir -p sessions
+
+# Expose gRPC port
+EXPOSE 50051
+
+# Start the service
+CMD ["npm", "start"]

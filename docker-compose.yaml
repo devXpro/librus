@@ -16,6 +16,25 @@ services:
       GOOGLE_APPLICATION_CREDENTIALS: '/src/creds.json'
       OPEN_AI_KEY: ${OPEN_AI_KEY}
 
+  librus-scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile.playwright
+    restart: always
+    # network_mode: service:surfshark  # Commented for testing - conflicts with ports
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      GRPC_PORT: 50051
+      NODE_ENV: production
+    volumes:
+      - ./playwright/sessions:/app/sessions
+    ports:
+      - "50051:50051"  # Expose for testing
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+
   chrome:
     image: browserless/chrome
     network_mode: service:surfshark
