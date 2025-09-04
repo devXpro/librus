@@ -33,9 +33,9 @@ export class LibrusUrls {
   static readonly DOWNLOAD_BUTTON_SELECTOR = 'img[src="/assets/img/homework_files_icons/download.png"]';
 
   // Selectors for message reply
-  static readonly REPLY_BUTTON_SELECTOR = 'button[name="Odpowiedz"]';
+  static readonly REPLY_BUTTON_SELECTOR = 'input[type="button"][value="Odpowiedz"]';
   static readonly MESSAGE_TEXT_AREA_SELECTOR = '#tresc_wiadomosci';
-  static readonly SEND_BUTTON_SELECTOR = 'button[name="Wyślij"]';
+  static readonly SEND_BUTTON_SELECTOR = 'input[type="submit"][name="wyslij"]';
 
   // Selectors for login process
   static readonly COOKIES_ACCEPT_BUTTON = 'button:has-text("Akceptuję i przechodzę do")';

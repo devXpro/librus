@@ -204,17 +204,30 @@ export class LibrusScraper {
       async (page: Page) => {
         await PageNavigator.navigateToMessage(page, messageUrl);
 
-        // Click "Odpowiedz" button
-        await page.getByRole('button', { name: 'Odpowiedz' }).click();
+        // Wait for page to be ready
+        await page.waitForSelector('body');
+        await page.waitForTimeout(2000); // Like in Go version
+
+        // Click "Odpowiedz" button using exact selector from Go
+        await page.locator(LibrusUrls.REPLY_BUTTON_SELECTOR).click();
         logger.debug('Clicked reply button');
 
-        // Fill the answer text
-        const textArea = page.locator(LibrusUrls.MESSAGE_TEXT_AREA_SELECTOR);
-        await textArea.fill(answerText + '\n\n');
+        // Wait for textarea to be ready
+        await page.waitForSelector(LibrusUrls.MESSAGE_TEXT_AREA_SELECTOR);
+
+        // Fill the answer text using JavaScript evaluation like in Go
+        await page.evaluate(`
+          let textarea = document.getElementById('tresc_wiadomosci');
+          let originalText = textarea.value;
+          let newText = '${answerText}';
+          textarea.value = newText + originalText;
+        `);
         logger.debug('Filled answer text');
 
-        // Click "Wyślij" button
-        await page.getByRole('button', { name: 'Wyślij' }).click();
+        await page.waitForTimeout(1000); // Like in Go version
+
+        // Click "Wyślij" button using exact selector from Go
+        await page.locator(LibrusUrls.SEND_BUTTON_SELECTOR).click();
         logger.debug('Clicked send button');
 
         // Wait for success
