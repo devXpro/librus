@@ -36,9 +36,40 @@ export class LibrusScraper {
         await page.waitForLoadState('networkidle');
         await page.waitForSelector('table.decorated', { timeout: 10000 });
 
-        const messages = await this.scrapeMessages(page);
-        logger.info('Successfully scraped messages', { login: credentials.login, count: messages.length });
+        // Get message links (like in Go version)
+        const messageLinks = await this.getMessageLinks(page);
+        logger.info('Found message links', { login: credentials.login, count: messageLinks.length });
 
+        // Process each message individually (like in Go version)
+        const messages: Message[] = [];
+        for (const link of messageLinks) {
+          try {
+            const fullUrl = new URL(link, 'https://synergia.librus.pl').toString();
+
+            // Skip javascript links
+            if (fullUrl.includes('javascript')) {
+              continue;
+            }
+
+            logger.debug('Processing message', { link: fullUrl });
+
+            // Navigate to message page and scrape it
+            await page.goto(fullUrl);
+            const message = await this.scrapeSingleMessage(page, fullUrl);
+
+            if (message) {
+              messages.push(message);
+              logger.trace('Successfully processed message', { id: message.id, title: message.title });
+            }
+
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logger.warn('Failed to process message', { link, error: errorMessage });
+            // Continue with other messages (like in Go version)
+          }
+        }
+
+        logger.info('Successfully processed all messages', { login: credentials.login, count: messages.length });
         return messages;
 
       } finally {
@@ -207,13 +238,45 @@ export class LibrusScraper {
     }
   }
 
+  private async getMessageLinks(page: Page): Promise<string[]> {
+    logger.debug('Getting message links from page');
+
+    // Find unread messages (bold text in table) - same selector as Go version
+    // const messageRows = await page.locator('table.decorated td[style*="font-weight: bold"] a').all();
+
+    // Temporary: Find ALL messages (both read and unread) for testing
+    const messageRows = await page.locator('table.decorated td a').all();
+
+    const links: string[] = [];
+    for (const messageLink of messageRows) {
+      try {
+        const href = await messageLink.getAttribute('href');
+        if (href) {
+          links.push(href);
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logger.warn('Failed to extract link from message row', { error: errorMessage });
+      }
+    }
+
+    // Remove duplicates (like in Go version)
+    const uniqueLinks = [...new Set(links)];
+    logger.debug('Extracted message links', { total: links.length, unique: uniqueLinks.length });
+
+    return uniqueLinks;
+  }
+
   private async scrapeMessages(page: Page): Promise<Message[]> {
     logger.debug('Scraping messages from page');
 
     const messages: Message[] = [];
-    
+
     // Find unread messages (bold text in table)
-    const messageRows = await page.locator('table.decorated td[style*="font-weight: bold"] a').all();
+    // const messageRows = await page.locator('table.decorated td[style*="font-weight: bold"] a').all();
+
+    // Temporary: Find ALL messages (both read and unread) for testing
+    const messageRows = await page.locator('table.decorated td a').all();
     
     for (const messageLink of messageRows) {
       try {
@@ -317,29 +380,41 @@ export class LibrusScraper {
     logger.debug('Scraping single message content');
 
     try {
-      // Extract message content
-      const contentElement = page.locator('.container-message-content, .message-content, .content').first();
+      // Wait for page to load
+      await page.waitForLoadState('networkidle');
+      await page.waitForSelector('table', { timeout: 10000 });
+
+      // Extract author from table 6 (index 6) which contains message details
+      const messageTable = page.locator('table').nth(6);
+      const authorCell = messageTable.locator('tr:has(td b:text("Nadawca")) td').nth(1);
+      const author = await authorCell.textContent() || '';
+
+      // Extract title from the same table
+      const titleCell = messageTable.locator('tr:has(td b:text("Temat")) td').nth(1);
+      const title = await titleCell.textContent() || '';
+
+      // Extract date from the same table
+      const dateCell = messageTable.locator('tr:has(td b:text("Wysłano")) td').nth(1);
+      const dateString = await dateCell.textContent() || '';
+
+      // Extract content from the generic block that comes after the message table
+      const contentElement = messageTable.locator('+ *');
       const content = await contentElement.textContent() || '';
 
-      // Extract title from page
-      const titleElement = page.locator('h1, .message-title, .title').first();
-      const title = await titleElement.textContent() || '';
+      // Parse date like in Go version: "2006-01-02 15:04:05" format
+      const dateTimestamp = this.parseLibrusDate(dateString.trim());
 
-      // Extract author info
-      const authorElement = page.locator('.message-author, .author').first();
-      const author = await authorElement.textContent() || '';
-
-      // TODO: Extract attachments if present
+      // TODO: Download attachments if present (like in Go version)
       const attachmentsDir = '';
 
       const message: Message = {
-        id: this.extractMessageId(messageUrl),
-        type: MessageType.MESSAGE_TYPE_MESSAGE, // Default, could be determined from URL
+        id: this.generateMessageId(messageUrl),
+        type: MessageType.MESSAGE_TYPE_MESSAGE,
         link: messageUrl,
         author: author.trim(),
         title: title.trim(),
         content: content.trim(),
-        dateTimestamp: Date.now(), // TODO: Extract actual date
+        dateTimestamp,
         attachmentsDir
       };
 
@@ -350,6 +425,12 @@ export class LibrusScraper {
       logger.error('Failed to scrape single message', { messageUrl, error: errorMessage });
       return null;
     }
+  }
+
+  private generateMessageId(url: string): string {
+    // Generate MD5 hash from URL like in Go version (for MESSAGE_TYPE_MESSAGE)
+    const crypto = require('crypto');
+    return crypto.createHash('md5').update(url).digest('hex');
   }
 
   private extractMessageId(url: string): string {
@@ -382,5 +463,26 @@ export class LibrusScraper {
 
     // Fallback to current timestamp
     return Date.now();
+  }
+
+  private parseLibrusDate(dateStr: string): number {
+    if (!dateStr) return Date.now();
+
+    // Parse Librus date format: "2006-01-02 15:04:05" (like in Go version)
+    const match = dateStr.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
+    if (match && match.length >= 7 && match[1] && match[2] && match[3] && match[4] && match[5] && match[6]) {
+      const year = parseInt(match[1]);
+      const month = parseInt(match[2]) - 1; // JavaScript months are 0-based
+      const day = parseInt(match[3]);
+      const hour = parseInt(match[4]);
+      const minute = parseInt(match[5]);
+      const second = parseInt(match[6]);
+
+      const date = new Date(year, month, day, hour, minute, second);
+      return date.getTime();
+    }
+
+    // Fallback to parseDate for simpler formats
+    return this.parseDate(dateStr);
   }
 }
