@@ -66,7 +66,7 @@ export class PageNavigator {
     await PageNavigator.navigateWithRetry(
       page,
       messageUrl,
-      'table' // Generic table selector for message content
+      LibrusUrls.GENERIC_TABLE_SELECTOR
     );
   }
 

@@ -8,6 +8,7 @@ interface LoginCredentials {
   password: string;
 }
 import { logger } from '../utils/logger';
+import { LibrusUrls } from '../utils/LibrusUrls';
 
 export class SessionManager {
   private sessionsDir = './sessions';
@@ -50,7 +51,7 @@ export class SessionManager {
       const context = await this.browser.newContext({
         storageState,
         viewport: { width: 2000, height: 2000 },
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 Edge/17.17134'
+        userAgent: LibrusUrls.USER_AGENT
       });
 
       if (await this.validateSession(context)) {
@@ -79,7 +80,7 @@ export class SessionManager {
     // Create context with viewport size like in Go scraper
     const context = await this.browser.newContext({
       viewport: { width: 2000, height: 2000 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/64.0.3282.140 Safari/537.36 Edge/17.17134'
+      userAgent: LibrusUrls.USER_AGENT
     });
 
     try {
@@ -132,7 +133,7 @@ export class SessionManager {
     
     try {
       // Navigate to login page
-      await page.goto('https://portal.librus.pl/rodzina');
+      await page.goto(LibrusUrls.PORTAL_URL);
       logger.trace('Navigated to portal page');
 
       // Accept cookies
@@ -194,7 +195,7 @@ export class SessionManager {
       }
 
       // Wait for navigation to main page (any synergia page indicates success)
-      await page.waitForURL('**/synergia.librus.pl/**', { timeout: 30000 });
+      await page.waitForURL(LibrusUrls.getLoginSuccessPattern(), { timeout: LibrusUrls.LOGIN_TIMEOUT });
       await page.waitForLoadState('networkidle'); // Wait for page to fully load
       logger.debug('Successfully logged in');
 
@@ -210,11 +211,11 @@ export class SessionManager {
 
     try {
       // Try to access a protected page
-      await page.goto('https://synergia.librus.pl/wiadomosci', { timeout: 10000 });
+      await page.goto(LibrusUrls.MESSAGES_URL, { timeout: LibrusUrls.VALIDATION_TIMEOUT });
 
       // Check if we're redirected to login page
       const currentUrl = page.url();
-      const isValid = !currentUrl.includes('/loguj');
+      const isValid = LibrusUrls.isLoggedInUrl(currentUrl);
 
       logger.trace('Session validation result', { isValid, currentUrl });
       return isValid;
