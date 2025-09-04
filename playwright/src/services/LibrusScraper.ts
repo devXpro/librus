@@ -204,34 +204,40 @@ export class LibrusScraper {
       async (page: Page) => {
         await PageNavigator.navigateToMessage(page, messageUrl);
 
-        // Wait for page to be ready
-        await page.waitForSelector('body');
-        await page.waitForTimeout(2000); // Like in Go version
-
-        // Click "Odpowiedz" button using exact selector from Go
+        // Wait for reply button to appear and click it
+        await page.waitForSelector(LibrusUrls.REPLY_BUTTON_SELECTOR);
         await page.locator(LibrusUrls.REPLY_BUTTON_SELECTOR).click();
         logger.debug('Clicked reply button');
 
-        // Wait for textarea to be ready
+        // Wait for textarea to appear and be ready
         await page.waitForSelector(LibrusUrls.MESSAGE_TEXT_AREA_SELECTOR);
 
-        // Fill the answer text using JavaScript evaluation like in Go
-        await page.evaluate(`
-          let textarea = document.getElementById('tresc_wiadomosci');
-          let originalText = textarea.value;
-          let newText = '${answerText}';
-          textarea.value = newText + originalText;
-        `);
+        // Get current text and prepend our answer (like in Go version)
+        const textArea = page.locator(LibrusUrls.MESSAGE_TEXT_AREA_SELECTOR);
+
+        // Focus on textarea and move cursor to the beginning
+        await textArea.focus();
+        await page.keyboard.press('Control+Home'); // Move cursor to start
+
+        // Type our answer at the beginning
+        await page.keyboard.type(answerText);
         logger.debug('Filled answer text');
 
-        await page.waitForTimeout(1000); // Like in Go version
+        // Verify text was added at the beginning
+        const textareaValue = await textArea.inputValue();
+        if (!textareaValue.startsWith(answerText)) {
+          throw new Error('Failed to add answer text at the beginning');
+        }
+        logger.debug('Verified answer text was added at the beginning');
 
-        // Click "Wyślij" button using exact selector from Go
+        // Wait for send button to be ready and click it
+        await page.waitForSelector(LibrusUrls.SEND_BUTTON_SELECTOR);
         await page.locator(LibrusUrls.SEND_BUTTON_SELECTOR).click();
         logger.debug('Clicked send button');
 
-        // Wait for success
-        await page.waitForTimeout(LibrusUrls.REPLY_TIMEOUT);
+        // Wait for success message "Wysłano wiadomość" to appear
+        await page.waitForSelector('text=Wysłano wiadomość', { timeout: 10000 });
+        logger.debug('Success message appeared - message sent successfully');
 
         logger.info('Successfully answered message', { login: credentials.login, messageUrl });
       },
