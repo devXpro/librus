@@ -9,6 +9,7 @@ interface LoginCredentials {
 }
 import { logger } from '../utils/logger';
 import { LibrusUrls } from '../utils/LibrusUrls';
+import { ProxyConfig } from '../utils/ProxyConfig';
 
 export class SessionManager {
   private sessionsDir = './sessions';
@@ -17,6 +18,31 @@ export class SessionManager {
   constructor(browser: Browser) {
     this.browser = browser;
     this.ensureSessionsDir();
+  }
+
+  /**
+   * Creates browser context with proxy configuration if available
+   */
+  private async createContextWithProxy(options: any = {}): Promise<BrowserContext> {
+    const proxyConfig = ProxyConfig.getProxyConfig();
+
+    const contextOptions = {
+      viewport: { width: 2000, height: 2000 },
+      userAgent: LibrusUrls.USER_AGENT,
+      ...options
+    };
+
+    if (proxyConfig) {
+      contextOptions.proxy = proxyConfig;
+      logger.info('Creating browser context with proxy', {
+        server: proxyConfig.server,
+        hasAuth: !!(proxyConfig.username && proxyConfig.password)
+      });
+    } else {
+      logger.debug('Creating browser context without proxy');
+    }
+
+    return await this.browser.newContext(contextOptions);
   }
 
   private async ensureSessionsDir(): Promise<void> {
@@ -48,11 +74,7 @@ export class SessionManager {
       const storageState = JSON.parse(sessionData);
 
       logger.debug('Attempting to restore session from file', { userId });
-      const context = await this.browser.newContext({
-        storageState,
-        viewport: { width: 2000, height: 2000 },
-        userAgent: LibrusUrls.USER_AGENT
-      });
+      const context = await this.createContextWithProxy({ storageState });
 
       if (await this.validateSession(context)) {
         logger.info('Successfully restored ephemeral session from file', { userId });
@@ -78,10 +100,7 @@ export class SessionManager {
     const userId = credentials.login;
 
     // Create context with viewport size like in Go scraper
-    const context = await this.browser.newContext({
-      viewport: { width: 2000, height: 2000 },
-      userAgent: LibrusUrls.USER_AGENT
-    });
+    const context = await this.createContextWithProxy();
 
     try {
       await this.performLogin(context, credentials);
@@ -136,23 +155,72 @@ export class SessionManager {
       await page.goto(LibrusUrls.PORTAL_URL);
       logger.trace('Navigated to portal page');
 
-      // Accept cookies
+      // Wait for page to load completely
+      await page.waitForLoadState('networkidle');
+      logger.debug('Page loaded completely');
+
+      // Accept cookies - try multiple selectors
       try {
-        await page.getByRole('button', { name: 'Akceptuję i przechodzę do' }).click({ timeout: 5000 });
-        logger.trace('Accepted cookies');
+        // Try different cookie consent selectors
+        const cookieSelectors = [
+          'button:has-text("Akceptuję i przechodzę do")',
+          'button:has-text("Akceptuję")',
+          '[data-testid="cookie-accept"]',
+          '.cookie-accept',
+          '#cookie-accept'
+        ];
+
+        let cookiesAccepted = false;
+        for (const selector of cookieSelectors) {
+          try {
+            await page.locator(selector).click({ timeout: 3000 });
+            logger.debug('Accepted cookies with selector:', selector);
+            cookiesAccepted = true;
+            break;
+          } catch (e) {
+            // Try next selector
+          }
+        }
+
+        if (!cookiesAccepted) {
+          logger.debug('No cookies dialog found with any selector');
+        }
       } catch (error) {
-        logger.debug('No cookies dialog found or already accepted');
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logger.debug('Error handling cookies:', errorMessage);
       }
 
-      // Wait for LIBRUS Synergia button to appear and click it
-      await page.getByRole('link', { name: ' LIBRUS Synergia' }).waitFor({ timeout: 2000 });
-      await page.getByRole('link', { name: ' LIBRUS Synergia' }).click();
-      logger.trace('Clicked LIBRUS Synergia');
+      // Wait for LIBRUS Synergia button to appear and click it with retry logic
+      logger.debug('Looking for LIBRUS Synergia button...');
+      await page.getByRole('link', { name: ' LIBRUS Synergia' }).waitFor({ timeout: 10000 });
 
-      // Wait for dropdown menu to appear and click on Zaloguj
-      await page.getByRole('link', { name: ' Zaloguj' }).waitFor({ timeout: 5000 });
+      // Retry logic for LIBRUS Synergia click and Zaloguj appearance
+      let zalogujFound = false;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        logger.debug(`Clicking LIBRUS Synergia (attempt ${attempt}/3)...`);
+        await page.getByRole('link', { name: ' LIBRUS Synergia' }).first().click();
+
+        try {
+          await page.getByRole('link', { name: ' Zaloguj' }).waitFor({ timeout: 1000 });
+          logger.debug('Zaloguj button appeared after click');
+          zalogujFound = true;
+          break;
+        } catch (error) {
+          logger.debug(`Zaloguj not found after attempt ${attempt}, waiting 500ms...`);
+          if (attempt < 3) {
+            await page.waitForTimeout(500);
+          }
+        }
+      }
+
+      if (!zalogujFound) {
+        throw new Error('Zaloguj button did not appear after 3 attempts to click LIBRUS Synergia');
+      }
+
+      // Click on Zaloguj
+      logger.debug('Clicking Zaloguj button...');
       await page.getByRole('link', { name: ' Zaloguj' }).click();
-      logger.trace('Clicked Zaloguj');
+      logger.debug('Clicked Zaloguj');
 
       // Wait for login iframe to appear and load
       await page.locator('#caLoginIframe').waitFor({ timeout: 10000 });
