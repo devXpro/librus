@@ -270,4 +270,25 @@ export class LibrusScraper {
 
     return message;
   }
+
+  async validateLogin(credentials: LoginCredentials): Promise<void> {
+    logger.info('Validating login credentials', { login: credentials.login });
+
+    // Use SessionExecutor to perform login and validation
+    // This will create ephemeral session, perform login, validate it, and clean up
+    await this.sessionExecutor.executeWithPage(
+      credentials,
+      async (page: Page) => {
+        // Just navigate to a protected page to ensure session is valid
+        await PageNavigator.navigateToMessages(page);
+        logger.debug('Successfully navigated to messages page - login valid');
+
+        // Return void - success is indicated by no exception
+        return;
+      },
+      'validateLogin'
+    );
+
+    logger.info('Login validation successful', { login: credentials.login });
+  }
 }

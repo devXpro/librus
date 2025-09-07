@@ -19,6 +19,9 @@ service LibrusScraper {
 
   // Health check
   rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+
+  // Login validation - performs login and validates session
+  rpc ValidateLogin(ValidateLoginRequest) returns (ValidateLoginResponse);
 }
 
 // Health check
@@ -27,6 +30,16 @@ message HealthCheckRequest {}
 message HealthCheckResponse {
   bool healthy = 1;
   string status = 2;
+}
+
+// Login validation
+message ValidateLoginRequest {
+  string login = 1;
+  string password = 2;
+}
+
+message ValidateLoginResponse {
+  // Empty response - success indicated by lack of gRPC error
 }
 
 // Message operations

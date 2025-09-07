@@ -67,6 +67,16 @@ export interface HealthCheckResponse {
   status: string;
 }
 
+/** Login validation */
+export interface ValidateLoginRequest {
+  login: string;
+  password: string;
+}
+
+/** Empty response - success indicated by lack of gRPC error */
+export interface ValidateLoginResponse {
+}
+
 /** Message operations */
 export interface GetMessagesRequest {
   /** unique identifier and for session creation/restoration */
@@ -252,6 +262,125 @@ export const HealthCheckResponse: MessageFns<HealthCheckResponse> = {
     const message = createBaseHealthCheckResponse();
     message.healthy = object.healthy ?? false;
     message.status = object.status ?? "";
+    return message;
+  },
+};
+
+function createBaseValidateLoginRequest(): ValidateLoginRequest {
+  return { login: "", password: "" };
+}
+
+export const ValidateLoginRequest: MessageFns<ValidateLoginRequest> = {
+  encode(message: ValidateLoginRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.login !== "") {
+      writer.uint32(10).string(message.login);
+    }
+    if (message.password !== "") {
+      writer.uint32(18).string(message.password);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ValidateLoginRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseValidateLoginRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.login = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.password = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ValidateLoginRequest {
+    return {
+      login: isSet(object.login) ? globalThis.String(object.login) : "",
+      password: isSet(object.password) ? globalThis.String(object.password) : "",
+    };
+  },
+
+  toJSON(message: ValidateLoginRequest): unknown {
+    const obj: any = {};
+    if (message.login !== "") {
+      obj.login = message.login;
+    }
+    if (message.password !== "") {
+      obj.password = message.password;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ValidateLoginRequest>, I>>(base?: I): ValidateLoginRequest {
+    return ValidateLoginRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ValidateLoginRequest>, I>>(object: I): ValidateLoginRequest {
+    const message = createBaseValidateLoginRequest();
+    message.login = object.login ?? "";
+    message.password = object.password ?? "";
+    return message;
+  },
+};
+
+function createBaseValidateLoginResponse(): ValidateLoginResponse {
+  return {};
+}
+
+export const ValidateLoginResponse: MessageFns<ValidateLoginResponse> = {
+  encode(_: ValidateLoginResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ValidateLoginResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseValidateLoginResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(_: any): ValidateLoginResponse {
+    return {};
+  },
+
+  toJSON(_: ValidateLoginResponse): unknown {
+    const obj: any = {};
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ValidateLoginResponse>, I>>(base?: I): ValidateLoginResponse {
+    return ValidateLoginResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ValidateLoginResponse>, I>>(_: I): ValidateLoginResponse {
+    const message = createBaseValidateLoginResponse();
     return message;
   },
 };
@@ -1211,6 +1340,15 @@ export const LibrusScraperDefinition = {
       responseStream: false,
       options: {},
     },
+    /** Login validation - performs login and validates session */
+    validateLogin: {
+      name: "ValidateLogin",
+      requestType: ValidateLoginRequest,
+      requestStream: false,
+      responseType: ValidateLoginResponse,
+      responseStream: false,
+      options: {},
+    },
   },
 } as const;
 
@@ -1240,6 +1378,11 @@ export interface LibrusScraperServiceImplementation<CallContextExt = {}> {
     request: HealthCheckRequest,
     context: CallContext & CallContextExt,
   ): Promise<DeepPartial<HealthCheckResponse>>;
+  /** Login validation - performs login and validates session */
+  validateLogin(
+    request: ValidateLoginRequest,
+    context: CallContext & CallContextExt,
+  ): Promise<DeepPartial<ValidateLoginResponse>>;
 }
 
 export interface LibrusScraperClient<CallOptionsExt = {}> {
@@ -1268,6 +1411,11 @@ export interface LibrusScraperClient<CallOptionsExt = {}> {
     request: DeepPartial<HealthCheckRequest>,
     options?: CallOptions & CallOptionsExt,
   ): Promise<HealthCheckResponse>;
+  /** Login validation - performs login and validates session */
+  validateLogin(
+    request: DeepPartial<ValidateLoginRequest>,
+    options?: CallOptions & CallOptionsExt,
+  ): Promise<ValidateLoginResponse>;
 }
 
 type Builtin = Date | Function | Uint8Array | string | number | boolean | undefined;

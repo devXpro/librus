@@ -22,7 +22,9 @@ import {
   AnswerMessageRequest,
   AnswerMessageResponse,
   HealthCheckRequest,
-  HealthCheckResponse
+  HealthCheckResponse,
+  ValidateLoginRequest,
+  ValidateLoginResponse
 } from './generated/librus_scraper';
 import type { CallContext } from 'nice-grpc-common';
 import type { DeepPartial } from './generated/librus_scraper';
@@ -251,6 +253,36 @@ class LibrusScraperService {
       healthy,
       status: healthy ? 'Service is running' : 'Service not initialized'
     };
+  }
+
+  async validateLogin(request: ValidateLoginRequest, context: CallContext): Promise<DeepPartial<ValidateLoginResponse>> {
+    const { login, password } = request;
+
+    logger.info('gRPC: ValidateLogin called', { login });
+
+    if (!this.scraper) {
+      throw new ServerError(Status.INTERNAL, 'Service not initialized');
+    }
+
+    try {
+      // Use scraper's validateLogin method which handles session management
+      await this.scraper.validateLogin({ login, password });
+
+      logger.info('gRPC: ValidateLogin successful', { login });
+
+      // Return empty response indicating success
+      return {};
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error('gRPC: ValidateLogin failed', { login, error: errorMessage });
+
+      if (this.isAuthenticationError(errorMessage)) {
+        throw new ServerError(Status.UNAUTHENTICATED, 'Authentication failed');
+      }
+
+      throw new ServerError(Status.INTERNAL, errorMessage);
+    }
   }
 }
 
