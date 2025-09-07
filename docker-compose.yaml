@@ -3,8 +3,6 @@ services:
   bot:
     restart: always
     build: .
-    platform: linux/x86_64
-    network_mode: service:surfshark
     logging:
       driver: json-file
       options:
@@ -21,25 +19,23 @@ services:
       context: .
       dockerfile: Dockerfile.playwright
     restart: always
-    # network_mode: service:surfshark  # Commented for testing - conflicts with ports
     environment:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       GRPC_PORT: 50051
       NODE_ENV: production
+      HTTP_PROXY_HOST: ${HTTP_PROXY_HOST}
+      HTTP_PROXY_PORT: ${HTTP_PROXY_PORT}
+      HTTP_PROXY_USER: ${HTTP_PROXY_USER}
+      HTTP_PROXY_PASSWORD: ${HTTP_PROXY_PASSWORD}
     volumes:
       - ./playwright/sessions:/app/sessions
+      - ./playwright/attachments:/app/attachments
     ports:
       - "50051:50051"  # Expose for testing
     logging:
       driver: json-file
       options:
         max-size: "50m"
-
-  chrome:
-    image: browserless/chrome
-    network_mode: service:surfshark
-    environment:
-      - DEFAULT_STEALTH=1
 
   mongodb:
     image: mongo:4.4.25
@@ -72,21 +68,3 @@ services:
       driver: json-file
       options:
         max-size: "50m"
-
-  surfshark:
-    image: ilteoood/docker-surfshark
-    container_name: surfshark
-    environment:
-      - SURFSHARK_USER=$SURFSHARK_USER
-      - SURFSHARK_PASSWORD=$SURFSHARK_PASSWORD
-      - SURFSHARK_COUNTRY=pl
-      - CONNECTION_TYPE=udp
-      - LAN_NETWORK=192.168.0.0/24
-    cap_add:
-      - NET_ADMIN
-    devices:
-      - /dev/net/tun
-    restart: unless-stopped
-    dns:
-      - 1.1.1.1
-      - 8.8.8.8
