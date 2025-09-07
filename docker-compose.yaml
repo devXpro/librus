@@ -13,6 +13,9 @@ services:
       CHROME_HEADLESS: 1
       GOOGLE_APPLICATION_CREDENTIALS: '/src/creds.json'
       OPEN_AI_KEY: ${OPEN_AI_KEY}
+      GRPC_SCRAPER_ADDRESS: librus-scraper:50051
+    volumes:
+      - ./playwright/attachments:/app/attachments
 
   librus-scraper:
     build:
