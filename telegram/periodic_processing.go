@@ -35,9 +35,15 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 		case <-channel.UpdateNow:
 			logger.Info("Starting forced message update")
 		}
+
+		logger.Debug("Getting Librus accounts from database")
 		accounts := mongo.GetLibrusAccountsFromDatabase()
+		logger.Debug("Retrieved accounts", zap.Int("count", len(accounts)))
+
 		for _, account := range accounts {
+			logger.Debug("Processing account", zap.String("login", account.Login))
 			// Use gRPC GetAllUpdates to get both messages and news in one call
+			logger.Debug("Calling gRPC GetAllUpdates", zap.String("login", account.Login))
 			msgs, news, err := client.GetAllUpdates(account.Login, account.Password)
 			if err != nil {
 				logger.ErrorWithError("Failed to get updates for account", err,
@@ -45,14 +51,28 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 				)
 				continue
 			}
+			logger.Debug("Received updates from gRPC",
+				zap.String("login", account.Login),
+				zap.Int("messages_count", len(msgs)),
+				zap.Int("news_count", len(news)),
+			)
 
 			// Combine messages and news
 			allMsgs := append(msgs, news...)
 			if len(allMsgs) == 0 {
+				logger.Debug("No new messages for account", zap.String("login", account.Login))
 				continue
 			}
+			logger.Debug("Total messages to process",
+				zap.String("login", account.Login),
+				zap.Int("total_count", len(allMsgs)),
+			)
 			allMsgs = addLibrusLoginToMessages(allMsgs, account.Login)
 
+			logger.Debug("Adding messages to database",
+				zap.String("login", account.Login),
+				zap.Int("messages_count", len(allMsgs)),
+			)
 			allMsgs, err = mongo.AddMessagesToDatabase(allMsgs, account.Login)
 			if err != nil {
 				logger.ErrorWithError("Failed to add messages to database", err,
@@ -60,12 +80,17 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 				)
 				continue
 			}
+			logger.Debug("Messages added to database",
+				zap.String("login", account.Login),
+				zap.Int("new_messages_count", len(allMsgs)),
+			)
 
 			sort.Slice(allMsgs, func(i, j int) bool {
 				return allMsgs[i].Date.Before(allMsgs[j].Date)
 			})
 
 			// Get all telegram users for this Librus account
+			logger.Debug("Getting telegram users for account", zap.String("login", account.Login))
 			telegramUsers, err := mongo.GetTelegramUsersByLibrusLogin(account.Login)
 			if err != nil {
 				logger.ErrorWithError("Failed to get telegram users for account", err,
@@ -73,14 +98,33 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 				)
 				continue
 			}
+			logger.Debug("Retrieved telegram users",
+				zap.String("login", account.Login),
+				zap.Int("users_count", len(telegramUsers)),
+			)
 
 			// Send messages to each telegram user
+			logger.Debug("Starting to send messages to users",
+				zap.String("login", account.Login),
+				zap.Int("messages_count", len(allMsgs)),
+				zap.Int("users_count", len(telegramUsers)),
+			)
 			for _, message := range allMsgs {
 				for _, telegramUser := range telegramUsers {
 					// Check if message was already sent to this user
 					if mongo.IsMessageSentToUser(telegramUser.Id, message.Id) {
+						logger.Debug("Message already sent to user, skipping",
+							zap.String("user_id", telegramUser.Id),
+							zap.String("message_id", message.Id),
+						)
 						continue
 					}
+
+					logger.Debug("Sending message to user",
+						zap.String("user_id", telegramUser.Id),
+						zap.String("message_id", message.Id),
+						zap.String("message_title", message.Title),
+					)
 
 					// Translate message if user has language preference
 					translatedMessage := message
@@ -116,7 +160,9 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 					)
 				}
 			}
+			logger.Debug("Finished processing account", zap.String("login", account.Login))
 		}
+		logger.Info("Finished processing all accounts, waiting for next interval")
 	}
 }
 

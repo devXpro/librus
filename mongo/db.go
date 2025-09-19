@@ -37,6 +37,7 @@ func CreateOrUpdateLibrusAccount(login, password string) error {
 
 // GetLibrusAccountsFromDatabase returns all Librus accounts
 func GetLibrusAccountsFromDatabase() []model.LibrusAccount {
+	logger.Debug("Querying librus_account collection")
 	collection := client.Db.Collection("librus_account")
 	cursor, err := collection.Find(context.Background(), bson.M{})
 	if err != nil {
@@ -58,6 +59,7 @@ func GetLibrusAccountsFromDatabase() []model.LibrusAccount {
 		logger.FatalWithError("Cursor error while reading Librus accounts", err)
 	}
 
+	logger.Debug("Retrieved Librus accounts from database", zap.Int("count", len(accounts)))
 	return accounts
 }
 
