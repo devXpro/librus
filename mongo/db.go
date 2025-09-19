@@ -191,11 +191,11 @@ func GetLibrusAccountCollection() *mongo.Collection {
 func AddMessagesToDatabase(messages []model.Message, librusLogin string) ([]model.Message, error) {
 	collection := client.Db.Collection("message")
 
-	// Find existing messages for this Librus account
+	// Find existing messages by ID (regardless of librus_login since _id must be unique)
 	existingMessages := make(map[string]bool)
 	cursor, err := collection.Find(
 		context.Background(),
-		bson.M{"_id": bson.M{"$in": getIds(messages)}, "librus_login": librusLogin},
+		bson.M{"_id": bson.M{"$in": getIds(messages)}},
 	)
 	if err != nil {
 		return nil, err
