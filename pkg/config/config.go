@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"time"
 )
 
 const (
@@ -12,6 +13,9 @@ const (
 
 	// gRPC configuration
 	DefaultGRPCScraperAddress = "localhost:50051"
+
+	// Message processing configuration
+	DefaultMessageCheckInterval = 30 * time.Minute
 )
 
 // GetAttachmentsBaseDir returns the base directory for attachments
@@ -28,6 +32,23 @@ func GetAttachmentsBaseDir() string {
 
 	// Local development
 	return LocalAttachmentsBaseDir
+}
+
+// GetMessageCheckInterval returns the message check interval
+// Uses environment variable or default value
+func GetMessageCheckInterval() time.Duration {
+	intervalStr := os.Getenv("MESSAGE_CHECK_INTERVAL")
+	if intervalStr == "" {
+		return DefaultMessageCheckInterval
+	}
+
+	interval, err := time.ParseDuration(intervalStr)
+	if err != nil {
+		// If parsing fails, return default
+		return DefaultMessageCheckInterval
+	}
+
+	return interval
 }
 
 // GetGRPCScraperAddress returns the gRPC scraper service address

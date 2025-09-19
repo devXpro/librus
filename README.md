@@ -160,6 +160,7 @@ The project is designed to run in Docker containers. See `docker-compose.yaml` f
 | `GRPC_SCRAPER_ADDRESS` | gRPC scraper service address | No |
 | `ATTACHMENTS_BASE_DIR` | Directory for attachments | No |
 | `LOG_LEVEL` | Logging level for scraper | No |
+| `MESSAGE_CHECK_INTERVAL` | Message check interval (e.g., 30m, 1h, 45s) | No |
 
 ## Contributing
 

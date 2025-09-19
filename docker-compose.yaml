@@ -8,12 +8,12 @@ services:
       options:
         max-size: "50m"
     environment:
-      DEBUG: ${DEBUG}
       TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
       CHROME_HEADLESS: 1
       GOOGLE_APPLICATION_CREDENTIALS: '/src/creds.json'
       OPEN_AI_KEY: ${OPEN_AI_KEY}
       GRPC_SCRAPER_ADDRESS: librus-scraper:50051
+      MESSAGE_CHECK_INTERVAL: ${MESSAGE_CHECK_INTERVAL:-30m}
     volumes:
       - ./playwright/attachments:/app/attachments
 

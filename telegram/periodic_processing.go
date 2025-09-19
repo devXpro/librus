@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"librus/model"
 	"librus/mongo"
+	"librus/pkg/config"
 	"librus/pkg/grpc_client"
 	"librus/telegram/channel"
 	"sort"
@@ -21,9 +22,13 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 	}
 	defer client.Close()
 
+	// Get configurable check interval
+	checkInterval := config.GetMessageCheckInterval()
+	fmt.Printf("Message check interval set to: %v\n", checkInterval)
+
 	for {
 		select {
-		case <-time.After(30 * time.Minute):
+		case <-time.After(checkInterval):
 			fmt.Println("Start updating...")
 		case <-channel.UpdateNow:
 			fmt.Println("Start force update")

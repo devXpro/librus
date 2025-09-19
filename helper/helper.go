@@ -8,7 +8,3 @@ func GetEnv(key, fallback string) string {
 	}
 	return fallback
 }
-
-func IsDebug() bool {
-	return GetEnv("DEBUG", "0") == "1"
-}
