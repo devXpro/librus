@@ -30,6 +30,12 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 		}
 		users := mongo.GetUsersFromDatabase()
 		for _, user := range users {
+			// Skip users who are not authenticated or don't have credentials
+			if user.State != model.StateAuthenticated || user.Login == "" || user.Password == "" {
+				fmt.Printf("Skipping user %s: not authenticated or missing credentials\n", user.Id)
+				continue
+			}
+
 			// Use gRPC GetAllUpdates to get both messages and news in one call
 			msgs, news, err := client.GetAllUpdates(user.Login, user.Password)
 			if err != nil {

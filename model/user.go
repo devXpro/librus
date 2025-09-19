@@ -6,12 +6,24 @@ import (
 	"log"
 )
 
+// UserState represents the current state of user interaction
+type UserState string
+
+const (
+	StateLanguageSelection UserState = "language_selection"
+	StateAwaitingLogin     UserState = "awaiting_login"
+	StateAwaitingPassword  UserState = "awaiting_password"
+	StateAuthenticated     UserState = "authenticated"
+	StateAwaitingURL       UserState = "awaiting_url"
+)
+
 type User struct {
-	Id          string  `bson:"_id"`
-	Login       string  `bson:"login"`
-	Password    string  `bson:"password"`
-	TelegramIDs []int64 `bson:"telegram_ids"`
-	Language    string  `bson:"language"`
+	Id          string    `bson:"_id"`
+	Login       string    `bson:"login"`
+	Password    string    `bson:"password"`
+	TelegramIDs []int64   `bson:"telegram_ids"`
+	Language    string    `bson:"language"`
+	State       UserState `bson:"state"`
 }
 
 func (user *User) SendTranslatedMessage(bot *tgbotapi.BotAPI, text string, forceLanguage ...string) {

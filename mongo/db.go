@@ -80,6 +80,52 @@ func UpdateUserLanguageByTelegramID(telegramID int64, language string) error {
 	return nil
 }
 
+// UpdateUserStateByTelegramID updates user state by telegram ID
+func UpdateUserStateByTelegramID(telegramID int64, state model.UserState) error {
+	collection := client.Db.Collection("user")
+	_, err := collection.UpdateOne(
+		context.Background(),
+		bson.M{"telegram_ids": telegramID},
+		bson.M{"$set": bson.M{"state": state}},
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// CreateUserWithState creates a new user with initial state
+func CreateUserWithState(telegramID int64, state model.UserState) error {
+	collection := client.Db.Collection("user")
+
+	user := bson.M{
+		"telegram_ids": []int64{telegramID},
+		"state":        state,
+		"language":     "", // Will be set later
+		"login":        "",
+		"password":     "",
+	}
+
+	_, err := collection.InsertOne(context.Background(), user)
+	return err
+}
+
+// UpdateUserFieldByTelegramID updates a specific field for user by telegram ID
+func UpdateUserFieldByTelegramID(telegramID int64, field string, value interface{}) error {
+	collection := client.Db.Collection("user")
+	_, err := collection.UpdateOne(
+		context.Background(),
+		bson.M{"telegram_ids": telegramID},
+		bson.M{"$set": bson.M{field: value}},
+	)
+	return err
+}
+
+// GetUserCollection returns the user collection (helper for other packages)
+func GetUserCollection() *mongo.Collection {
+	return client.Db.Collection("user")
+}
+
 func AddMessagesToDatabase(messages []model.Message, userId string) ([]model.Message, error) {
 	collection := client.Db.Collection("message")
 
