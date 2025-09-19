@@ -50,10 +50,10 @@ func (h *ConfirmationHandler) handleConfirmNo(ctx *router.Context) error {
 
 // handleCancel cancels current operation and returns to appropriate menu
 func (h *ConfirmationHandler) handleCancel(ctx *router.Context) error {
-	// Reset user state to authenticated
-	err := mongo.UpdateUserStateByTelegramID(ctx.Update.ChatID, model.StateAuthenticated)
+	// Reset telegram user state to authenticated
+	err := mongo.UpdateTelegramUserState(ctx.Update.ChatID, model.StateAuthenticated)
 	if err != nil {
-		log.Printf("Error updating user state: %v", err)
+		log.Printf("Error updating telegram user state: %v", err)
 	}
 
 	// Return to main menu
@@ -63,10 +63,10 @@ func (h *ConfirmationHandler) handleCancel(ctx *router.Context) error {
 
 // handleResetConfirmed processes confirmed account reset
 func (h *ConfirmationHandler) handleResetConfirmed(ctx *router.Context) error {
-	// Delete user from database
-	err := mongo.DeleteUserByTelegramID(ctx.Update.ChatID)
+	// Delete telegram user from database
+	err := mongo.DeleteTelegramUserByTelegramID(ctx.Update.ChatID)
 	if err != nil {
-		log.Printf("Error deleting user: %v", err)
+		log.Printf("Error deleting telegram user: %v", err)
 		return ctx.EditMessage(localization.MsgSomethingWrong)
 	}
 
@@ -76,10 +76,10 @@ func (h *ConfirmationHandler) handleResetConfirmed(ctx *router.Context) error {
 		return err
 	}
 
-	// Create new user with language selection state
-	err = mongo.CreateUserWithState(ctx.Update.ChatID, model.StateLanguageSelection)
+	// Create new telegram user with language selection state
+	err = mongo.CreateTelegramUserWithState(ctx.Update.ChatID, model.StateLanguageSelection)
 	if err != nil {
-		log.Printf("Error creating new user: %v", err)
+		log.Printf("Error creating new telegram user: %v", err)
 		return ctx.SendMessage(localization.MsgSomethingWrong)
 	}
 

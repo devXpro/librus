@@ -40,17 +40,17 @@ func (h *LanguageHandler) Handle(ctx *router.Context) error {
 		return ctx.EditMessage(localization.MsgSomethingWrong)
 	}
 
-	// Update user language
-	err := mongo.UpdateUserLanguageByTelegramID(ctx.Update.ChatID, langCode)
+	// Update telegram user language
+	err := mongo.UpdateTelegramUserLanguage(ctx.Update.ChatID, langCode)
 	if err != nil {
-		log.Printf("Error updating user language: %v", err)
+		log.Printf("Error updating telegram user language: %v", err)
 		return ctx.EditMessage(localization.MsgSomethingWrong)
 	}
 
-	// Update user state to awaiting login
-	err = mongo.UpdateUserStateByTelegramID(ctx.Update.ChatID, model.StateAwaitingLogin)
+	// Update telegram user state to awaiting login
+	err = mongo.UpdateTelegramUserState(ctx.Update.ChatID, model.StateAwaitingLogin)
 	if err != nil {
-		log.Printf("Error updating user state: %v", err)
+		log.Printf("Error updating telegram user state: %v", err)
 		return ctx.EditMessage(localization.MsgSomethingWrong)
 	}
 

@@ -36,14 +36,21 @@ func (h *MenuHandler) Handle(ctx *router.Context) error {
 
 // handleCheckMessages checks for new messages
 func (h *MenuHandler) handleCheckMessages(ctx *router.Context) error {
-	// Check if user is authenticated
-	if ctx.User == nil || ctx.User.State != model.StateAuthenticated || ctx.User.Login == "" || ctx.User.Password == "" {
+	// Check if telegram user is authenticated and has Librus account
+	if ctx.User == nil || ctx.User.State != model.StateAuthenticated || ctx.User.LibrusLogin == "" {
+		loginKeyboard := keyboard.LoginKeyboard(ctx.Localization)
+		return ctx.EditMessageWithKeyboard(localization.MsgPleaseLogin, loginKeyboard)
+	}
+
+	// Get Librus account
+	librusAccount, err := mongo.FindLibrusAccount(ctx.User.LibrusLogin)
+	if err != nil || librusAccount == nil {
 		loginKeyboard := keyboard.LoginKeyboard(ctx.Localization)
 		return ctx.EditMessageWithKeyboard(localization.MsgPleaseLogin, loginKeyboard)
 	}
 
 	// Show processing message
-	err := ctx.EditMessage(localization.MsgProcessing)
+	err = ctx.EditMessage(localization.MsgProcessing)
 	if err != nil {
 		return err
 	}
@@ -57,9 +64,9 @@ func (h *MenuHandler) handleCheckMessages(ctx *router.Context) error {
 	defer client.Close()
 
 	// Get all updates
-	msgs, news, err := client.GetAllUpdates(ctx.User.Login, ctx.User.Password)
+	msgs, news, err := client.GetAllUpdates(librusAccount.Login, librusAccount.Password)
 	if err != nil {
-		log.Printf("Failed to get updates for user %s: %v", ctx.User.Login, err)
+		log.Printf("Failed to get updates for account %s: %v", librusAccount.Login, err)
 		return ctx.EditMessage(localization.MsgServiceError)
 	}
 
@@ -70,13 +77,13 @@ func (h *MenuHandler) handleCheckMessages(ctx *router.Context) error {
 		return ctx.EditMessageWithKeyboard(localization.MsgNoNewMessages, backKeyboard)
 	}
 
-	// Add user ID to messages
+	// Add librus login to messages
 	for i := range allMsgs {
-		allMsgs[i].UserID = ctx.User.Id
+		allMsgs[i].LibrusLogin = ctx.User.LibrusLogin
 	}
 
 	// Add to database (only new ones will be added)
-	allMsgs, err = mongo.AddMessagesToDatabase(allMsgs, ctx.User.Id)
+	allMsgs, err = mongo.AddMessagesToDatabase(allMsgs, ctx.User.LibrusLogin)
 	if err != nil {
 		log.Printf("Error adding messages to database: %v", err)
 		return ctx.EditMessage(localization.MsgSomethingWrong)
@@ -89,13 +96,27 @@ func (h *MenuHandler) handleCheckMessages(ctx *router.Context) error {
 
 	// Send messages
 	for _, message := range allMsgs {
-		if ctx.User.Language != "" {
-			message.Translate(ctx.User.Language)
+		// Check if message was already sent to this user
+		if mongo.IsMessageSentToUser(ctx.User.Id, message.Id) {
+			continue
 		}
 
-		err = message.Send(ctx.Bot, ctx.Update.ChatID)
+		// Translate message if user has language preference
+		translatedMessage := message
+		if ctx.User.Language != "" {
+			translatedMessage.Translate(ctx.User.Language)
+		}
+
+		err = translatedMessage.Send(ctx.Bot, ctx.Update.ChatID)
 		if err != nil {
 			log.Printf("Error sending message: %v", err)
+			continue
+		}
+
+		// Mark message as sent
+		err = mongo.MarkMessageAsSent(ctx.User.Id, message.Id)
+		if err != nil {
+			log.Printf("Error marking message as sent: %v", err)
 		}
 
 		// Clean up attachments
@@ -111,16 +132,16 @@ func (h *MenuHandler) handleCheckMessages(ctx *router.Context) error {
 
 // handleGetByURL prompts user to send URL
 func (h *MenuHandler) handleGetByURL(ctx *router.Context) error {
-	// Check if user is authenticated
-	if ctx.User == nil || ctx.User.State != model.StateAuthenticated || ctx.User.Login == "" || ctx.User.Password == "" {
+	// Check if telegram user is authenticated and has Librus account
+	if ctx.User == nil || ctx.User.State != model.StateAuthenticated || ctx.User.LibrusLogin == "" {
 		loginKeyboard := keyboard.LoginKeyboard(ctx.Localization)
 		return ctx.EditMessageWithKeyboard(localization.MsgPleaseLogin, loginKeyboard)
 	}
 
-	// Update user state to awaiting URL
-	err := mongo.UpdateUserStateByTelegramID(ctx.Update.ChatID, model.StateAwaitingURL)
+	// Update telegram user state to awaiting URL
+	err := mongo.UpdateTelegramUserState(ctx.Update.ChatID, model.StateAwaitingURL)
 	if err != nil {
-		log.Printf("Error updating user state: %v", err)
+		log.Printf("Error updating telegram user state: %v", err)
 		return ctx.EditMessage(localization.MsgSomethingWrong)
 	}
 
@@ -142,10 +163,10 @@ func (h *MenuHandler) handleHelp(ctx *router.Context) error {
 
 // handleBackToMenu returns to main menu
 func (h *MenuHandler) handleBackToMenu(ctx *router.Context) error {
-	// Reset user state to authenticated
-	err := mongo.UpdateUserStateByTelegramID(ctx.Update.ChatID, model.StateAuthenticated)
+	// Reset telegram user state to authenticated
+	err := mongo.UpdateTelegramUserState(ctx.Update.ChatID, model.StateAuthenticated)
 	if err != nil {
-		log.Printf("Error updating user state: %v", err)
+		log.Printf("Error updating telegram user state: %v", err)
 	}
 
 	mainMenu := keyboard.MainMenuKeyboard(ctx.Localization)

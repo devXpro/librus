@@ -1,9 +1,7 @@
 package model
 
 import (
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"librus/translator"
-	"log"
+	"time"
 )
 
 // UserState represents the current state of user interaction
@@ -17,33 +15,27 @@ const (
 	StateAwaitingURL       UserState = "awaiting_url"
 )
 
-type User struct {
-	Id          string    `bson:"_id"`
-	Login       string    `bson:"login"`
-	Password    string    `bson:"password"`
-	TelegramIDs []int64   `bson:"telegram_ids"`
-	Language    string    `bson:"language"`
-	State       UserState `bson:"state"`
+// LibrusAccount represents a Librus school account
+type LibrusAccount struct {
+	Login    string `bson:"_id"`      // Login is unique, so we use it as _id
+	Password string `bson:"password"` // Encrypted password
 }
 
-func (user *User) SendTranslatedMessage(bot *tgbotapi.BotAPI, text string, forceLanguage ...string) {
-	var err error
-	if user.Language != "" {
-		lang := user.Language
-		if len(forceLanguage) > 0 {
-			lang = forceLanguage[0]
-		}
-		text, err = translator.TranslateText(lang, text)
-		if err != nil {
-			log.Println(err)
-			return
-		}
-	}
-	for _, id := range user.TelegramIDs {
-		msg := tgbotapi.NewMessage(id, text)
-		_, err = bot.Send(msg)
-		if err != nil {
-			log.Println(err)
-		}
-	}
+// TelegramUser represents a Telegram user with individual settings
+type TelegramUser struct {
+	Id           string    `bson:"_id"`            // Auto-generated ID
+	TelegramID   int64     `bson:"telegram_id"`    // Telegram chat ID (unique)
+	LibrusLogin  string    `bson:"librus_login"`   // Reference to LibrusAccount._id
+	Language     string    `bson:"language"`       // User's language preference
+	State        UserState `bson:"state"`          // Current interaction state
+	CreatedAt    time.Time `bson:"created_at"`     // When user was created
+	LastActiveAt time.Time `bson:"last_active_at"` // Last interaction time
+}
+
+// UserMessageStatus tracks which messages were sent to which users
+type UserMessageStatus struct {
+	Id             string    `bson:"_id"`              // Auto-generated ID
+	TelegramUserID string    `bson:"telegram_user_id"` // Reference to TelegramUser._id
+	MessageID      string    `bson:"message_id"`       // Reference to Message._id
+	SentAt         time.Time `bson:"sent_at"`          // When message was sent
 }

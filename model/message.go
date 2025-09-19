@@ -22,14 +22,14 @@ const (
 )
 
 type Message struct {
-	Id             string      `bson:"_id"`
-	Type           MessageType `bson:"type"`
-	Link           string      `bson:"link"`
-	Author         string      `bson:"author"`
-	Title          string      `bson:"title"`
-	Content        string      `bson:"content"`
-	Date           time.Time   `bson:"date"`
-	UserID         string      `bson:"user_id"`
+	Id             string      `bson:"_id"`                       // MD5 hash of URL or title+content+date
+	Type           MessageType `bson:"type"`                      // message, notification, news
+	Link           string      `bson:"link"`                      // URL to message in Librus
+	Author         string      `bson:"author"`                    // Message author
+	Title          string      `bson:"title"`                     // Message title
+	Content        string      `bson:"content"`                   // Message content
+	Date           time.Time   `bson:"date"`                      // Message date
+	LibrusLogin    string      `bson:"librus_login"`              // Reference to LibrusAccount._id
 	AttachmentsDir string      `bson:"attachments_dir,omitempty"` // Path to directory with attachments
 }
 

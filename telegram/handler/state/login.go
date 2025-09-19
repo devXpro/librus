@@ -41,17 +41,17 @@ func (h *LoginHandler) handleLoginInput(ctx *router.Context) error {
 	// For now, we'll store it in a temporary field or use a different approach
 	// Let's update the user with the login and move to password state
 
-	// Update user login
-	err := mongo.UpdateUserFieldByTelegramID(ctx.Update.ChatID, "login", login)
+	// Update telegram user with librus login
+	err := mongo.UpdateTelegramUserField(ctx.Update.ChatID, "librus_login", login)
 	if err != nil {
-		log.Printf("Error updating user login: %v", err)
+		log.Printf("Error updating telegram user librus login: %v", err)
 		return ctx.SendMessage(localization.MsgSomethingWrong)
 	}
 
 	// Update state to awaiting password
-	err = mongo.UpdateUserStateByTelegramID(ctx.Update.ChatID, model.StateAwaitingPassword)
+	err = mongo.UpdateTelegramUserState(ctx.Update.ChatID, model.StateAwaitingPassword)
 	if err != nil {
-		log.Printf("Error updating user state: %v", err)
+		log.Printf("Error updating telegram user state: %v", err)
 		return ctx.SendMessage(localization.MsgSomethingWrong)
 	}
 
@@ -68,18 +68,18 @@ func (h *LoginHandler) handlePasswordInput(ctx *router.Context) error {
 		return ctx.SendMessage(localization.MsgEnterPassword)
 	}
 
-	// Get current user to get the login
-	user, err := mongo.FindUserByTelegramID(ctx.Update.ChatID)
+	// Get current telegram user to get the librus login
+	telegramUser, err := mongo.FindTelegramUserByTelegramID(ctx.Update.ChatID)
 	if err != nil {
-		log.Printf("Error finding user: %v", err)
+		log.Printf("Error finding telegram user: %v", err)
 		return ctx.SendMessage(localization.MsgSomethingWrong)
 	}
 
-	if user.Login == "" {
+	if telegramUser.LibrusLogin == "" {
 		// Something went wrong, restart login process
-		err = mongo.UpdateUserStateByTelegramID(ctx.Update.ChatID, model.StateAwaitingLogin)
+		err = mongo.UpdateTelegramUserState(ctx.Update.ChatID, model.StateAwaitingLogin)
 		if err != nil {
-			log.Printf("Error updating user state: %v", err)
+			log.Printf("Error updating telegram user state: %v", err)
 		}
 		return ctx.SendMessage(localization.MsgEnterLogin)
 	}
@@ -91,17 +91,17 @@ func (h *LoginHandler) handlePasswordInput(ctx *router.Context) error {
 	}
 
 	// Validate credentials with gRPC
-	if h.validateCredentials(user.Login, password) {
-		// Success - update user with password and set authenticated state
-		err = mongo.UpdateUserFieldByTelegramID(ctx.Update.ChatID, "password", password)
+	if h.validateCredentials(telegramUser.LibrusLogin, password) {
+		// Success - create/update Librus account and set telegram user as authenticated
+		err = mongo.CreateOrUpdateLibrusAccount(telegramUser.LibrusLogin, password)
 		if err != nil {
-			log.Printf("Error updating user password: %v", err)
+			log.Printf("Error creating/updating Librus account: %v", err)
 			return ctx.SendMessage(localization.MsgSomethingWrong)
 		}
 
-		err = mongo.UpdateUserStateByTelegramID(ctx.Update.ChatID, model.StateAuthenticated)
+		err = mongo.UpdateTelegramUserState(ctx.Update.ChatID, model.StateAuthenticated)
 		if err != nil {
-			log.Printf("Error updating user state: %v", err)
+			log.Printf("Error updating telegram user state: %v", err)
 			return ctx.SendMessage(localization.MsgSomethingWrong)
 		}
 

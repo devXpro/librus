@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"librus/model"
+	"librus/mongo"
 	"librus/pkg/grpc_client"
 	"librus/telegram/localization"
 	"librus/telegram/router"
@@ -24,8 +25,14 @@ func (h *ReplyHandler) Handle(ctx *router.Context) error {
 		return nil // Not a reply, let other handlers process it
 	}
 
-	// Check if user is authenticated
-	if ctx.User == nil || ctx.User.State != model.StateAuthenticated || ctx.User.Login == "" || ctx.User.Password == "" {
+	// Check if telegram user is authenticated and has Librus account
+	if ctx.User == nil || ctx.User.State != model.StateAuthenticated || ctx.User.LibrusLogin == "" {
+		return ctx.SendMessage(localization.MsgPleaseLogin)
+	}
+
+	// Get Librus account
+	librusAccount, err := mongo.FindLibrusAccount(ctx.User.LibrusLogin)
+	if err != nil || librusAccount == nil {
 		return ctx.SendMessage(localization.MsgPleaseLogin)
 	}
 
@@ -66,7 +73,7 @@ func (h *ReplyHandler) Handle(ctx *router.Context) error {
 	}
 
 	// Send reply
-	err = client.AnswerMessage(ctx.User.Login, ctx.User.Password, link, text)
+	err = client.AnswerMessage(librusAccount.Login, librusAccount.Password, link, text)
 	if err != nil {
 		log.Printf("Failed to answer message: %v", err)
 		return ctx.SendMessage(localization.MsgSomethingWrong)

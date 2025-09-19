@@ -30,7 +30,7 @@ type Update struct {
 type Context struct {
 	Bot          *tgbotapi.BotAPI
 	Update       *Update
-	User         *model.User
+	User         *model.TelegramUser
 	Localization *localization.Localizer
 }
 

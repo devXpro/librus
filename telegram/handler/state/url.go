@@ -18,8 +18,14 @@ type URLHandler struct{}
 
 // Handle processes URL input messages
 func (h *URLHandler) Handle(ctx *router.Context) error {
-	// Check if user has valid credentials (state should be StateAwaitingURL when this handler is called)
-	if ctx.User == nil || ctx.User.Login == "" || ctx.User.Password == "" {
+	// Check if telegram user has valid credentials (state should be StateAwaitingURL when this handler is called)
+	if ctx.User == nil || ctx.User.LibrusLogin == "" {
+		return ctx.SendMessage(localization.MsgPleaseLogin)
+	}
+
+	// Get Librus account
+	librusAccount, err := mongo.FindLibrusAccount(ctx.User.LibrusLogin)
+	if err != nil || librusAccount == nil {
 		return ctx.SendMessage(localization.MsgPleaseLogin)
 	}
 
@@ -32,7 +38,7 @@ func (h *URLHandler) Handle(ctx *router.Context) error {
 	}
 
 	// Show processing message
-	err := ctx.SendMessage(localization.MsgProcessing)
+	err = ctx.SendMessage(localization.MsgProcessing)
 	if err != nil {
 		log.Printf("Error sending processing message: %v", err)
 	}
@@ -46,14 +52,14 @@ func (h *URLHandler) Handle(ctx *router.Context) error {
 	defer client.Close()
 
 	// Process the specific message
-	message, err := client.GetSingleMessage(ctx.User.Login, ctx.User.Password, urlText)
+	message, err := client.GetSingleMessage(librusAccount.Login, librusAccount.Password, urlText)
 	if err != nil {
 		log.Printf("Failed to process message: %v", err)
 		return ctx.SendMessage(localization.MsgServiceError)
 	}
 
-	// Set user ID
-	message.UserID = ctx.User.Id
+	// Set librus login
+	message.LibrusLogin = ctx.User.LibrusLogin
 
 	// Apply user's language preference
 	if ctx.User.Language != "" {
@@ -72,10 +78,10 @@ func (h *URLHandler) Handle(ctx *router.Context) error {
 		fmt.Printf("Error cleaning up attachments: %v\n", err)
 	}
 
-	// Reset user state and show main menu
-	err = mongo.UpdateUserStateByTelegramID(ctx.Update.ChatID, model.StateAuthenticated)
+	// Reset telegram user state and show main menu
+	err = mongo.UpdateTelegramUserState(ctx.Update.ChatID, model.StateAuthenticated)
 	if err != nil {
-		log.Printf("Error updating user state: %v", err)
+		log.Printf("Error updating telegram user state: %v", err)
 	}
 
 	// Send success message with main menu

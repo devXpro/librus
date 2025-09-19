@@ -26,10 +26,10 @@ func (h *AuthHandler) Handle(ctx *router.Context) error {
 
 // handleLoginStart initiates the login process
 func (h *AuthHandler) handleLoginStart(ctx *router.Context) error {
-	// Update user state to awaiting login
-	err := mongo.UpdateUserStateByTelegramID(ctx.Update.ChatID, model.StateAwaitingLogin)
+	// Update telegram user state to awaiting login
+	err := mongo.UpdateTelegramUserState(ctx.Update.ChatID, model.StateAwaitingLogin)
 	if err != nil {
-		log.Printf("Error updating user state: %v", err)
+		log.Printf("Error updating telegram user state: %v", err)
 		return ctx.EditMessage(localization.MsgSomethingWrong)
 	}
 

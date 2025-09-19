@@ -58,10 +58,10 @@ func (r *Router) HandleUpdate(bot *tgbotapi.BotAPI, tgUpdate tgbotapi.Update) er
 		return nil
 	}
 
-	// Load user from database
-	user, err := mongo.FindUserByTelegramID(update.ChatID)
+	// Load telegram user from database
+	telegramUser, err := mongo.FindTelegramUserByTelegramID(update.ChatID)
 	if err != nil {
-		log.Printf("Error loading user: %v", err)
+		log.Printf("Error loading telegram user: %v", err)
 		return err
 	}
 
@@ -69,8 +69,8 @@ func (r *Router) HandleUpdate(bot *tgbotapi.BotAPI, tgUpdate tgbotapi.Update) er
 	ctx := &Context{
 		Bot:          bot,
 		Update:       update,
-		User:         user,
-		Localization: localization.NewLocalizer(getLanguageForUser(user)),
+		User:         telegramUser,
+		Localization: localization.NewLocalizer(getLanguageForUser(telegramUser)),
 	}
 
 	// Route based on update type
@@ -151,8 +151,8 @@ func (r *Router) handleMessage(ctx *Context) error {
 	return nil
 }
 
-// getLanguageForUser returns the language code for a user
-func getLanguageForUser(user *model.User) string {
+// getLanguageForUser returns the language code for a telegram user
+func getLanguageForUser(user *model.TelegramUser) string {
 	if user != nil && user.Language != "" {
 		return user.Language
 	}

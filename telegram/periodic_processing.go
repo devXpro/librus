@@ -28,18 +28,12 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 		case <-channel.UpdateNow:
 			fmt.Println("Start force update")
 		}
-		users := mongo.GetUsersFromDatabase()
-		for _, user := range users {
-			// Skip users who are not authenticated or don't have credentials
-			if user.State != model.StateAuthenticated || user.Login == "" || user.Password == "" {
-				fmt.Printf("Skipping user %s: not authenticated or missing credentials\n", user.Id)
-				continue
-			}
-
+		accounts := mongo.GetLibrusAccountsFromDatabase()
+		for _, account := range accounts {
 			// Use gRPC GetAllUpdates to get both messages and news in one call
-			msgs, news, err := client.GetAllUpdates(user.Login, user.Password)
+			msgs, news, err := client.GetAllUpdates(account.Login, account.Password)
 			if err != nil {
-				fmt.Printf("Failed to get updates for user %s: %v\n", user.Login, err)
+				fmt.Printf("Failed to get updates for account %s: %v\n", account.Login, err)
 				continue
 			}
 
@@ -48,26 +42,50 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 			if len(allMsgs) == 0 {
 				continue
 			}
-			allMsgs = addUserIdToMessages(allMsgs, user.Id)
+			allMsgs = addLibrusLoginToMessages(allMsgs, account.Login)
 
-			allMsgs, err = mongo.AddMessagesToDatabase(allMsgs, user.Id)
-
+			allMsgs, err = mongo.AddMessagesToDatabase(allMsgs, account.Login)
 			if err != nil {
 				fmt.Println(err)
 				continue
 			}
+
 			sort.Slice(allMsgs, func(i, j int) bool {
 				return allMsgs[i].Date.Before(allMsgs[j].Date)
 			})
 
+			// Get all telegram users for this Librus account
+			telegramUsers, err := mongo.GetTelegramUsersByLibrusLogin(account.Login)
+			if err != nil {
+				fmt.Printf("Failed to get telegram users for account %s: %v\n", account.Login, err)
+				continue
+			}
+
+			// Send messages to each telegram user
 			for _, message := range allMsgs {
-				if user.Language != "" {
-					message.Translate(user.Language)
-				}
-				for _, id := range user.TelegramIDs {
-					err = message.Send(bot, id)
+				for _, telegramUser := range telegramUsers {
+					// Check if message was already sent to this user
+					if mongo.IsMessageSentToUser(telegramUser.Id, message.Id) {
+						continue
+					}
+
+					// Translate message if user has language preference
+					translatedMessage := message
+					if telegramUser.Language != "" {
+						translatedMessage.Translate(telegramUser.Language)
+					}
+
+					// Send message
+					err = translatedMessage.Send(bot, telegramUser.TelegramID)
 					if err != nil {
-						fmt.Println(err)
+						fmt.Printf("Error sending message to user %s: %v\n", telegramUser.Id, err)
+						continue
+					}
+
+					// Mark message as sent
+					err = mongo.MarkMessageAsSent(telegramUser.Id, message.Id)
+					if err != nil {
+						fmt.Printf("Error marking message as sent: %v\n", err)
 					}
 				}
 
@@ -80,10 +98,10 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 	}
 }
 
-func addUserIdToMessages(msgs []model.Message, id string) []model.Message {
+func addLibrusLoginToMessages(msgs []model.Message, login string) []model.Message {
 	var result []model.Message
 	for _, msg := range msgs {
-		msg.UserID = id
+		msg.LibrusLogin = login
 		result = append(result, msg)
 	}
 	return result

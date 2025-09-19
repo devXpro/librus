@@ -15,22 +15,22 @@ type StartHandler struct{}
 
 // Handle processes the /start command
 func (h *StartHandler) Handle(ctx *router.Context) error {
-	// Check if user exists
+	// Check if telegram user exists
 	if ctx.User == nil {
-		// Create new user with language selection state
-		err := mongo.CreateUserWithState(ctx.Update.ChatID, model.StateLanguageSelection)
+		// Create new telegram user with language selection state
+		err := mongo.CreateTelegramUserWithState(ctx.Update.ChatID, model.StateLanguageSelection)
 		if err != nil {
-			log.Printf("Error creating user: %v", err)
+			log.Printf("Error creating telegram user: %v", err)
 			return ctx.SendMessage(localization.MsgSomethingWrong)
 		}
 
-		// Reload user
-		user, err := mongo.FindUserByTelegramID(ctx.Update.ChatID)
+		// Reload telegram user
+		telegramUser, err := mongo.FindTelegramUserByTelegramID(ctx.Update.ChatID)
 		if err != nil {
-			log.Printf("Error reloading user: %v", err)
+			log.Printf("Error reloading telegram user: %v", err)
 			return ctx.SendMessage(localization.MsgSomethingWrong)
 		}
-		ctx.User = user
+		ctx.User = telegramUser
 	}
 
 	// Handle based on user state
@@ -43,9 +43,9 @@ func (h *StartHandler) Handle(ctx *router.Context) error {
 		return h.handleAuthenticatedUser(ctx)
 	default:
 		// Reset to language selection if unknown state
-		err := mongo.UpdateUserStateByTelegramID(ctx.Update.ChatID, model.StateLanguageSelection)
+		err := mongo.UpdateTelegramUserState(ctx.Update.ChatID, model.StateLanguageSelection)
 		if err != nil {
-			log.Printf("Error updating user state: %v", err)
+			log.Printf("Error updating telegram user state: %v", err)
 		}
 		return h.handleLanguageSelection(ctx)
 	}
