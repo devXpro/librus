@@ -2,19 +2,20 @@ package telegram
 
 import (
 	"crypto/tls"
-	"fmt"
+	"net/http"
+
 	"librus/helper"
 	"librus/model"
+	"librus/pkg/logger"
 	"librus/telegram/handler/callback"
 	"librus/telegram/handler/command"
 	"librus/telegram/handler/message"
 	"librus/telegram/handler/state"
 	"librus/telegram/keyboard"
 	"librus/telegram/router"
-	"log"
-	"net/http"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"go.uber.org/zap"
 )
 
 func Start() {
@@ -35,7 +36,7 @@ func Start() {
 
 		// Handle update with router
 		if err := r.HandleUpdate(bot, update); err != nil {
-			log.Printf("Error handling update: %v", err)
+			logger.ErrorWithError("Error handling update", err)
 		}
 	}
 
@@ -89,7 +90,7 @@ func createBot() *tgbotapi.BotAPI {
 		httpClient,
 	)
 	if err != nil {
-		log.Fatal(err)
+		logger.FatalWithError("Failed to create Telegram bot", err)
 	}
 
 	return bot
@@ -103,11 +104,21 @@ func createUpdateConfig() tgbotapi.UpdateConfig {
 
 func logReceivedUpdate(update tgbotapi.Update) {
 	if update.Message != nil {
-		fmt.Printf("Received message: %s (from: %d)\n", update.Message.Text, update.Message.From.ID)
+		logger.Debug("Received message",
+			zap.String("text", update.Message.Text),
+			zap.Int64("from_id", update.Message.From.ID),
+			zap.String("from_username", update.Message.From.UserName),
+		)
 		if update.Message.ReplyToMessage != nil {
-			fmt.Printf("ReplyToMessage: %s\n", update.Message.ReplyToMessage.Text)
+			logger.Debug("Reply to message",
+				zap.String("reply_text", update.Message.ReplyToMessage.Text),
+			)
 		}
 	} else if update.CallbackQuery != nil {
-		fmt.Printf("Received callback: %s (from: %d)\n", update.CallbackQuery.Data, update.CallbackQuery.From.ID)
+		logger.Debug("Received callback",
+			zap.String("data", update.CallbackQuery.Data),
+			zap.Int64("from_id", update.CallbackQuery.From.ID),
+			zap.String("from_username", update.CallbackQuery.From.UserName),
+		)
 	}
 }

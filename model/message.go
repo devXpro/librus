@@ -4,13 +4,16 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
-	"librus/translator"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"librus/pkg/logger"
+	"librus/translator"
+
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"go.uber.org/zap"
 )
 
 type MessageType string
@@ -190,7 +193,10 @@ func (message *Message) Send(bot *tgbotapi.BotAPI, telegramId int64) error {
 		docMsg := tgbotapi.NewDocument(telegramId, doc)
 		_, err = bot.Send(docMsg)
 		if err != nil {
-			fmt.Printf("Error sending document %s: %v\n", doc.Name, err)
+			logger.ErrorWithError("Error sending document", err,
+				zap.String("document_name", doc.Name),
+				zap.Int64("telegram_id", telegramId),
+			)
 		}
 	}
 

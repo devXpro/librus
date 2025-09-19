@@ -14,6 +14,7 @@ services:
       OPEN_AI_KEY: ${OPEN_AI_KEY}
       GRPC_SCRAPER_ADDRESS: librus-scraper:50051
       MESSAGE_CHECK_INTERVAL: ${MESSAGE_CHECK_INTERVAL:-30m}
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
     volumes:
       - ./playwright/attachments:/app/attachments
 

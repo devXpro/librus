@@ -1,44 +1,48 @@
 package telegram
 
 import (
-	"fmt"
+	"sort"
+	"time"
+
 	"librus/model"
 	"librus/mongo"
 	"librus/pkg/config"
 	"librus/pkg/grpc_client"
+	"librus/pkg/logger"
 	"librus/telegram/channel"
-	"sort"
-	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"go.uber.org/zap"
 )
 
 func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 	// Create gRPC client once and reuse it
 	client, err := grpc_client.NewLibrusScraperClient()
 	if err != nil {
-		fmt.Printf("Failed to create gRPC client: %v\n", err)
+		logger.ErrorWithError("Failed to create gRPC client", err)
 		return
 	}
 	defer client.Close()
 
 	// Get configurable check interval
 	checkInterval := config.GetMessageCheckInterval()
-	fmt.Printf("Message check interval set to: %v\n", checkInterval)
+	logger.Info("Message check interval configured", zap.Duration("interval", checkInterval))
 
 	for {
 		select {
 		case <-time.After(checkInterval):
-			fmt.Println("Start updating...")
+			logger.Info("Starting periodic message check")
 		case <-channel.UpdateNow:
-			fmt.Println("Start force update")
+			logger.Info("Starting forced message update")
 		}
 		accounts := mongo.GetLibrusAccountsFromDatabase()
 		for _, account := range accounts {
 			// Use gRPC GetAllUpdates to get both messages and news in one call
 			msgs, news, err := client.GetAllUpdates(account.Login, account.Password)
 			if err != nil {
-				fmt.Printf("Failed to get updates for account %s: %v\n", account.Login, err)
+				logger.ErrorWithError("Failed to get updates for account", err,
+					zap.String("login", account.Login),
+				)
 				continue
 			}
 
@@ -51,7 +55,9 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 
 			allMsgs, err = mongo.AddMessagesToDatabase(allMsgs, account.Login)
 			if err != nil {
-				fmt.Println(err)
+				logger.ErrorWithError("Failed to add messages to database", err,
+					zap.String("login", account.Login),
+				)
 				continue
 			}
 
@@ -62,7 +68,9 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 			// Get all telegram users for this Librus account
 			telegramUsers, err := mongo.GetTelegramUsersByLibrusLogin(account.Login)
 			if err != nil {
-				fmt.Printf("Failed to get telegram users for account %s: %v\n", account.Login, err)
+				logger.ErrorWithError("Failed to get telegram users for account", err,
+					zap.String("login", account.Login),
+				)
 				continue
 			}
 
@@ -83,20 +91,29 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 					// Send message
 					err = translatedMessage.Send(bot, telegramUser.TelegramID)
 					if err != nil {
-						fmt.Printf("Error sending message to user %s: %v\n", telegramUser.Id, err)
+						logger.ErrorWithError("Error sending message to user", err,
+							zap.String("user_id", telegramUser.Id),
+							zap.Int64("telegram_id", telegramUser.TelegramID),
+						)
 						continue
 					}
 
 					// Mark message as sent
 					err = mongo.MarkMessageAsSent(telegramUser.Id, message.Id)
 					if err != nil {
-						fmt.Printf("Error marking message as sent: %v\n", err)
+						logger.ErrorWithError("Error marking message as sent", err,
+							zap.String("user_id", telegramUser.Id),
+							zap.String("message_id", message.Id),
+						)
 					}
 				}
 
 				// Clean up attachments directory after sending to all users
 				if err := message.CleanupAttachments(); err != nil {
-					fmt.Printf("Error cleaning up attachments: %v\n", err)
+					logger.ErrorWithError("Error cleaning up attachments", err,
+						zap.String("message_id", message.Id),
+						zap.String("attachments_dir", message.AttachmentsDir),
+					)
 				}
 			}
 		}

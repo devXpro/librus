@@ -2,15 +2,17 @@ package state
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	"librus/model"
 	"librus/mongo"
 	"librus/pkg/grpc_client"
+	"librus/pkg/logger"
 	"librus/telegram/keyboard"
 	"librus/telegram/localization"
 	"librus/telegram/router"
+
+	"go.uber.org/zap"
 )
 
 // LoginHandler handles login state messages
@@ -24,7 +26,10 @@ func (h *LoginHandler) Handle(ctx *router.Context) error {
 	case model.StateAwaitingPassword:
 		return h.handlePasswordInput(ctx)
 	default:
-		log.Printf("LoginHandler called with invalid state: %s", ctx.User.State)
+		logger.Warn("LoginHandler called with invalid state",
+			zap.String("state", string(ctx.User.State)),
+			zap.Int64("user_id", ctx.User.TelegramID),
+		)
 		return nil
 	}
 }
@@ -44,14 +49,20 @@ func (h *LoginHandler) handleLoginInput(ctx *router.Context) error {
 	// Update telegram user with librus login
 	err := mongo.UpdateTelegramUserField(ctx.Update.ChatID, "librus_login", login)
 	if err != nil {
-		log.Printf("Error updating telegram user librus login: %v", err)
+		logger.ErrorWithError("Error updating telegram user librus login", err,
+			zap.Int64("chat_id", ctx.Update.ChatID),
+			zap.String("login", login),
+		)
 		return ctx.SendMessage(localization.MsgSomethingWrong)
 	}
 
 	// Update state to awaiting password
 	err = mongo.UpdateTelegramUserState(ctx.Update.ChatID, model.StateAwaitingPassword)
 	if err != nil {
-		log.Printf("Error updating telegram user state: %v", err)
+		logger.ErrorWithError("Error updating telegram user state", err,
+			zap.Int64("chat_id", ctx.Update.ChatID),
+			zap.String("state", string(model.StateAwaitingPassword)),
+		)
 		return ctx.SendMessage(localization.MsgSomethingWrong)
 	}
 
@@ -71,7 +82,9 @@ func (h *LoginHandler) handlePasswordInput(ctx *router.Context) error {
 	// Get current telegram user to get the librus login
 	telegramUser, err := mongo.FindTelegramUserByTelegramID(ctx.Update.ChatID)
 	if err != nil {
-		log.Printf("Error finding telegram user: %v", err)
+		logger.ErrorWithError("Error finding telegram user", err,
+			zap.Int64("chat_id", ctx.Update.ChatID),
+		)
 		return ctx.SendMessage(localization.MsgSomethingWrong)
 	}
 
@@ -79,7 +92,9 @@ func (h *LoginHandler) handlePasswordInput(ctx *router.Context) error {
 		// Something went wrong, restart login process
 		err = mongo.UpdateTelegramUserState(ctx.Update.ChatID, model.StateAwaitingLogin)
 		if err != nil {
-			log.Printf("Error updating telegram user state: %v", err)
+			logger.ErrorWithError("Error updating telegram user state", err,
+				zap.Int64("chat_id", ctx.Update.ChatID),
+			)
 		}
 		return ctx.SendMessage(localization.MsgEnterLogin)
 	}
@@ -87,7 +102,9 @@ func (h *LoginHandler) handlePasswordInput(ctx *router.Context) error {
 	// Show processing message
 	err = ctx.SendMessage(localization.MsgProcessing)
 	if err != nil {
-		log.Printf("Error sending processing message: %v", err)
+		logger.ErrorWithError("Error sending processing message", err,
+			zap.Int64("chat_id", ctx.Update.ChatID),
+		)
 	}
 
 	// Validate credentials with gRPC
@@ -95,13 +112,19 @@ func (h *LoginHandler) handlePasswordInput(ctx *router.Context) error {
 		// Success - create/update Librus account and set telegram user as authenticated
 		err = mongo.CreateOrUpdateLibrusAccount(telegramUser.LibrusLogin, password)
 		if err != nil {
-			log.Printf("Error creating/updating Librus account: %v", err)
+			logger.ErrorWithError("Error creating/updating Librus account", err,
+				zap.String("login", telegramUser.LibrusLogin),
+				zap.Int64("chat_id", ctx.Update.ChatID),
+			)
 			return ctx.SendMessage(localization.MsgSomethingWrong)
 		}
 
 		err = mongo.UpdateTelegramUserState(ctx.Update.ChatID, model.StateAuthenticated)
 		if err != nil {
-			log.Printf("Error updating telegram user state: %v", err)
+			logger.ErrorWithError("Error updating telegram user state", err,
+				zap.Int64("chat_id", ctx.Update.ChatID),
+				zap.String("state", string(model.StateAuthenticated)),
+			)
 			return ctx.SendMessage(localization.MsgSomethingWrong)
 		}
 

@@ -1,15 +1,17 @@
 package callback
 
 import (
-	"log"
 	"sort"
 
 	"librus/model"
 	"librus/mongo"
 	"librus/pkg/grpc_client"
+	"librus/pkg/logger"
 	"librus/telegram/keyboard"
 	"librus/telegram/localization"
 	"librus/telegram/router"
+
+	"go.uber.org/zap"
 )
 
 // MenuHandler handles main menu callbacks
@@ -29,7 +31,10 @@ func (h *MenuHandler) Handle(ctx *router.Context) error {
 	case keyboard.CallbackBackToMenu:
 		return h.handleBackToMenu(ctx)
 	default:
-		log.Printf("Unknown menu callback: %s", ctx.Update.Data)
+		logger.Warn("Unknown menu callback",
+			zap.String("callback_data", ctx.Update.Data),
+			zap.Int64("user_id", ctx.User.TelegramID),
+		)
 		return nil
 	}
 }
@@ -58,7 +63,9 @@ func (h *MenuHandler) handleCheckMessages(ctx *router.Context) error {
 	// Create gRPC client
 	client, err := grpc_client.NewLibrusScraperClient()
 	if err != nil {
-		log.Printf("Failed to create gRPC client: %v", err)
+		logger.ErrorWithError("Failed to create gRPC client", err,
+			zap.Int64("user_id", ctx.User.TelegramID),
+		)
 		return ctx.EditMessage(localization.MsgServiceError)
 	}
 	defer client.Close()
@@ -66,7 +73,10 @@ func (h *MenuHandler) handleCheckMessages(ctx *router.Context) error {
 	// Get all updates
 	msgs, news, err := client.GetAllUpdates(librusAccount.Login, librusAccount.Password)
 	if err != nil {
-		log.Printf("Failed to get updates for account %s: %v", librusAccount.Login, err)
+		logger.ErrorWithError("Failed to get updates for account", err,
+			zap.String("login", librusAccount.Login),
+			zap.Int64("user_id", ctx.User.TelegramID),
+		)
 		return ctx.EditMessage(localization.MsgServiceError)
 	}
 
@@ -85,7 +95,10 @@ func (h *MenuHandler) handleCheckMessages(ctx *router.Context) error {
 	// Add to database (only new ones will be added)
 	allMsgs, err = mongo.AddMessagesToDatabase(allMsgs, ctx.User.LibrusLogin)
 	if err != nil {
-		log.Printf("Error adding messages to database: %v", err)
+		logger.ErrorWithError("Error adding messages to database", err,
+			zap.String("librus_login", ctx.User.LibrusLogin),
+			zap.Int64("user_id", ctx.User.TelegramID),
+		)
 		return ctx.EditMessage(localization.MsgSomethingWrong)
 	}
 
@@ -109,19 +122,28 @@ func (h *MenuHandler) handleCheckMessages(ctx *router.Context) error {
 
 		err = translatedMessage.Send(ctx.Bot, ctx.Update.ChatID)
 		if err != nil {
-			log.Printf("Error sending message: %v", err)
+			logger.ErrorWithError("Error sending message", err,
+				zap.Int64("chat_id", ctx.Update.ChatID),
+				zap.String("message_id", message.Id),
+			)
 			continue
 		}
 
 		// Mark message as sent
 		err = mongo.MarkMessageAsSent(ctx.User.Id, message.Id)
 		if err != nil {
-			log.Printf("Error marking message as sent: %v", err)
+			logger.ErrorWithError("Error marking message as sent", err,
+				zap.String("user_id", ctx.User.Id),
+				zap.String("message_id", message.Id),
+			)
 		}
 
 		// Clean up attachments
 		if err := message.CleanupAttachments(); err != nil {
-			log.Printf("Error cleaning up attachments: %v", err)
+			logger.ErrorWithError("Error cleaning up attachments", err,
+				zap.String("message_id", message.Id),
+				zap.String("attachments_dir", message.AttachmentsDir),
+			)
 		}
 	}
 
@@ -141,7 +163,10 @@ func (h *MenuHandler) handleGetByURL(ctx *router.Context) error {
 	// Update telegram user state to awaiting URL
 	err := mongo.UpdateTelegramUserState(ctx.Update.ChatID, model.StateAwaitingURL)
 	if err != nil {
-		log.Printf("Error updating telegram user state: %v", err)
+		logger.ErrorWithError("Error updating telegram user state", err,
+			zap.Int64("chat_id", ctx.Update.ChatID),
+			zap.String("state", string(model.StateAwaitingURL)),
+		)
 		return ctx.EditMessage(localization.MsgSomethingWrong)
 	}
 
@@ -166,7 +191,10 @@ func (h *MenuHandler) handleBackToMenu(ctx *router.Context) error {
 	// Reset telegram user state to authenticated
 	err := mongo.UpdateTelegramUserState(ctx.Update.ChatID, model.StateAuthenticated)
 	if err != nil {
-		log.Printf("Error updating telegram user state: %v", err)
+		logger.ErrorWithError("Error updating telegram user state", err,
+			zap.Int64("chat_id", ctx.Update.ChatID),
+			zap.String("state", string(model.StateAuthenticated)),
+		)
 	}
 
 	mainMenu := keyboard.MainMenuKeyboard(ctx.Localization)

@@ -3,15 +3,17 @@ package mongo
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"librus/model"
 	"librus/mongo/client"
-	"log"
-	"time"
+	"librus/pkg/logger"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.uber.org/zap"
 )
 
 // CreateOrUpdateLibrusAccount creates or updates a Librus account
@@ -38,7 +40,7 @@ func GetLibrusAccountsFromDatabase() []model.LibrusAccount {
 	collection := client.Db.Collection("librus_account")
 	cursor, err := collection.Find(context.Background(), bson.M{})
 	if err != nil {
-		log.Fatal(err)
+		logger.FatalWithError("Failed to find Librus accounts", err)
 	}
 	defer cursor.Close(context.Background())
 
@@ -47,13 +49,13 @@ func GetLibrusAccountsFromDatabase() []model.LibrusAccount {
 		var account model.LibrusAccount
 		err = cursor.Decode(&account)
 		if err != nil {
-			log.Println(err)
+			logger.ErrorWithError("Failed to decode Librus account", err)
 			continue
 		}
 		accounts = append(accounts, account)
 	}
 	if err = cursor.Err(); err != nil {
-		log.Fatal(err)
+		logger.FatalWithError("Cursor error while reading Librus accounts", err)
 	}
 
 	return accounts
@@ -78,7 +80,7 @@ func GetTelegramUsersByLibrusLogin(librusLogin string) ([]model.TelegramUser, er
 		var user model.TelegramUser
 		err = cursor.Decode(&user)
 		if err != nil {
-			log.Println(err)
+			logger.ErrorWithError("Failed to decode telegram user", err)
 			continue
 		}
 		users = append(users, user)
@@ -263,7 +265,10 @@ func IsMessageSentToUser(telegramUserID, messageID string) bool {
 
 	count, err := collection.CountDocuments(context.Background(), filter)
 	if err != nil {
-		log.Printf("Error checking message status: %v", err)
+		logger.ErrorWithError("Error checking message status", err,
+			zap.String("telegram_user_id", telegramUserID),
+			zap.String("message_id", messageID),
+		)
 		return false
 	}
 
@@ -318,6 +323,6 @@ func DeleteAllMessages() error {
 	if err != nil {
 		return fmt.Errorf("failed to delete messages: %v", err)
 	}
-	fmt.Printf("Deleted %d documents from collection", result.DeletedCount)
+	logger.Info("Deleted messages from collection", zap.Int64("count", result.DeletedCount))
 	return nil
 }

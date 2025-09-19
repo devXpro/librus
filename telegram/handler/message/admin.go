@@ -1,13 +1,14 @@
 package message
 
 import (
-	"log"
-
 	"librus/helper"
 	"librus/mongo"
+	"librus/pkg/logger"
 	"librus/telegram/channel"
 	"librus/telegram/localization"
 	"librus/telegram/router"
+
+	"go.uber.org/zap"
 )
 
 // AdminHandler handles admin commands with token authentication
@@ -39,7 +40,9 @@ func (h *AdminHandler) handleUpdateNow(ctx *router.Context) error {
 func (h *AdminHandler) handleDeleteAllMessages(ctx *router.Context) error {
 	err := mongo.DeleteAllMessages()
 	if err != nil {
-		log.Printf("Error deleting messages: %v", err)
+		logger.ErrorWithError("Error deleting messages", err,
+			zap.Int64("admin_user_id", ctx.User.TelegramID),
+		)
 		return ctx.SendMessage(localization.MsgServiceError)
 	}
 	return ctx.SendMessage(localization.MsgCheckComplete)
