@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"librus/model"
 	"librus/mongo"
-	"librus/parser"
+	"librus/pkg/grpc_client"
 	"librus/telegram/channel"
 	"sort"
 	"time"
@@ -13,6 +13,14 @@ import (
 )
 
 func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
+	// Create gRPC client once and reuse it
+	client, err := grpc_client.NewLibrusScraperClient()
+	if err != nil {
+		fmt.Printf("Failed to create gRPC client: %v\n", err)
+		return
+	}
+	defer client.Close()
+
 	for {
 		select {
 		case <-time.After(30 * time.Minute):
@@ -22,45 +30,31 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 		}
 		users := mongo.GetUsersFromDatabase()
 		for _, user := range users {
-			ctx, cancel, err := parser.Login(user.Login, user.Password)
+			// Use gRPC GetAllUpdates to get both messages and news in one call
+			msgs, news, err := client.GetAllUpdates(user.Login, user.Password)
+			if err != nil {
+				fmt.Printf("Failed to get updates for user %s: %v\n", user.Login, err)
+				continue
+			}
+
+			// Combine messages and news
+			allMsgs := append(msgs, news...)
+			if len(allMsgs) == 0 {
+				continue
+			}
+			allMsgs = addUserIdToMessages(allMsgs, user.Id)
+
+			allMsgs, err = mongo.AddMessagesToDatabase(allMsgs, user.Id)
 
 			if err != nil {
 				fmt.Println(err)
 				continue
 			}
-			msgs, err := parser.GetMessages(ctx)
-			if err != nil {
-				fmt.Println(err)
-				continue
-			}
-			news, err := parser.GetNews(ctx)
-			if err != nil {
-				fmt.Println(err)
-				continue
-			}
-			msgs = append(msgs, news...)
-			cancel()
-
-			if err != nil {
-				fmt.Println(err)
-				continue
-			}
-			if len(msgs) == 0 {
-				continue
-			}
-			msgs = addUserIdToMessages(msgs, user.Id)
-
-			msgs, err = mongo.AddMessagesToDatabase(msgs, user.Id)
-
-			if err != nil {
-				fmt.Println(err)
-				continue
-			}
-			sort.Slice(msgs, func(i, j int) bool {
-				return msgs[i].Date.Before(msgs[j].Date)
+			sort.Slice(allMsgs, func(i, j int) bool {
+				return allMsgs[i].Date.Before(allMsgs[j].Date)
 			})
 
-			for _, message := range msgs {
+			for _, message := range allMsgs {
 				if user.Language != "" {
 					message.Translate(user.Language)
 				}

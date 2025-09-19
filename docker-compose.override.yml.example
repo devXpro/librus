@@ -1,0 +1,23 @@
+# Example override file for local development
+# Copy this file to docker-compose.override.yml and modify as needed
+# This file automatically extends docker-compose.yaml when running docker-compose commands
+
+services:
+  mongodb:
+    ports:
+      - "27017:27017"  # Expose MongoDB for local development and testing
+
+  librus-scraper:
+    ports:
+      - "50051:50051"  # Expose gRPC port for local testing
+    environment:
+      LOG_LEVEL: DEBUG  # Enable debug logging for development
+
+  mongo-express:
+    ports:
+      - "12328:8081"   # Expose Mongo Express for database management
+
+  # Uncomment to expose bot service for debugging
+  # bot:
+  #   ports:
+  #     - "8080:8080"  # If you add HTTP endpoints for debugging

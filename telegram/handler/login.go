@@ -4,7 +4,7 @@ import (
 	"fmt"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"librus/mongo"
-	"librus/parser"
+	"librus/pkg/grpc_client"
 	"log"
 	"strings"
 )
@@ -53,11 +53,19 @@ func (l *Login) checkLoginAndPassword(login string, password string) bool {
 	if login == "" {
 		return false
 	}
-	_, cancel, err := parser.Login(login, password)
+
+	client, err := grpc_client.NewLibrusScraperClient()
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("Failed to create gRPC client: %v\n", err)
 		return false
 	}
-	cancel()
+	defer client.Close()
+
+	err = client.ValidateLogin(login, password)
+	if err != nil {
+		fmt.Printf("Login validation failed: %v\n", err)
+		return false
+	}
+
 	return true
 }

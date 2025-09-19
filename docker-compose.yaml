@@ -48,6 +48,8 @@ services:
       - MONGO_LOG_DIR=/dev/null
     volumes:
       - .docker/data/mongodb:/data/db
+#    ports:
+#      - "27017:27017"
     command: mongod
     logging:
       driver: json-file

@@ -4,7 +4,7 @@ import (
 	"errors"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"librus/mongo"
-	"librus/parser"
+	"librus/pkg/grpc_client"
 	"librus/translator"
 	"log"
 	"strings"
@@ -29,12 +29,14 @@ func (a *Answer) Handle(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		user.SendTranslatedMessage(bot, "It is not possible to reply to this type of messages.")
 		return
 	}
-	ctx, cancel, err := parser.Login(user.Login, user.Password)
-	defer cancel()
+	client, err := grpc_client.NewLibrusScraperClient()
 	if err != nil {
-		user.SendTranslatedMessage(bot, "Login issues...")
+		user.SendTranslatedMessage(bot, "Service connection issues...")
+		log.Printf("Failed to create gRPC client: %v\n", err)
 		return
 	}
+	defer client.Close()
+
 	text := update.Message.Text
 	if user.Language != "" {
 		text, err = translator.TranslateText("pl", text)
@@ -44,9 +46,12 @@ func (a *Answer) Handle(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 			return
 		}
 	}
-	err = parser.AnswerMessage(link, text, ctx)
+
+	err = client.AnswerMessage(user.Login, user.Password, link, text)
 	if err != nil {
 		user.SendTranslatedMessage(bot, "Can't answer, something went wrong")
+		log.Printf("Failed to answer message: %v\n", err)
+		return
 	}
 	user.SendTranslatedMessage(bot, "Message sent successfully")
 }

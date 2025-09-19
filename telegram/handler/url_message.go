@@ -1,12 +1,10 @@
 package handler
 
 import (
-	"context"
 	"fmt"
 	"librus/mongo"
-	"librus/parser"
+	"librus/pkg/grpc_client"
 	"strings"
-	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -46,24 +44,20 @@ func (u *URLMessage) Handle(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	}
 
 	// Let the user know we're processing their request
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Processing your request. Logging in to Librus...")
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Processing your request...")
 	bot.Send(msg)
 
-	// Login to Librus
-	ctx, cancel, err := parser.Login(user.Login, user.Password)
+	// Create gRPC client
+	client, err := grpc_client.NewLibrusScraperClient()
 	if err != nil {
-		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Failed to login to Librus: "+err.Error())
+		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Service connection error: "+err.Error())
 		bot.Send(msg)
 		return
 	}
-	defer cancel()
+	defer client.Close()
 
-	// Set a timeout for the entire operation
-	ctx, cancel = context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
-
-	// Process the specific message using the new GetSingleMessage method
-	message, err := parser.GetSingleMessage(ctx, urlText)
+	// Process the specific message using gRPC GetSingleMessage method
+	message, err := client.GetSingleMessage(user.Login, user.Password, urlText)
 	if err != nil {
 		msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Failed to process message: "+err.Error())
 		bot.Send(msg)

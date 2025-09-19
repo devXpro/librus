@@ -91,6 +91,28 @@ The `pkg/config` package handles paths automatically:
 3. **Go Bot Service** reads files from `{ATTACHMENTS_BASE_DIR}/{uuid}/` and sends to Telegram
 4. **Go Bot Service** cleans up the directory after sending
 
+## Migration Complete
+
+The migration from browser-based parsing to gRPC is now complete:
+
+### What was removed:
+- `parser/` package (login.go, messages.go, news.go, answer.go, attachments.go, utils.go)
+- `test_login.go` file
+- chromedp and goquery dependencies
+
+### What was replaced:
+- `parser.Login()` → `grpc_client.ValidateLogin()`
+- `parser.GetMessages()` → `grpc_client.GetMessages()`
+- `parser.GetNews()` → `grpc_client.GetNews()`
+- `parser.GetSingleMessage()` → `grpc_client.GetSingleMessage()`
+- `parser.AnswerMessage()` → `grpc_client.AnswerMessage()`
+
+### Updated files:
+- `telegram/periodic_processing.go` - now uses `grpc_client.GetAllUpdates()`
+- `telegram/handler/login.go` - now uses `grpc_client.ValidateLogin()`
+- `telegram/handler/answer.go` - now uses `grpc_client.AnswerMessage()`
+- `telegram/handler/url_message.go` - now uses `grpc_client.GetSingleMessage()`
+
 ## Testing
 
 ```bash
@@ -99,6 +121,12 @@ go test -v proto_test.go
 
 # Test configuration
 go test ./pkg/config -v
+
+# Test gRPC client
+go test ./pkg/grpc_client -v
+
+# Test with integration tests (requires gRPC server running)
+INTEGRATION_TESTS=true go test ./pkg/grpc_client -v
 
 # Build project
 go build .
