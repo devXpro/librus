@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"librus/pkg/logger"
 	"librus/translator"
@@ -22,6 +23,15 @@ const (
 	MsgTypeMessage      MessageType = "message"
 	MsgTypeNotification MessageType = "notification"
 	MsgTypeNews         MessageType = "news"
+)
+
+const (
+	// TelegramMaxMessageLength is the maximum length for a Telegram message
+	TelegramMaxMessageLength = 4096
+	// ReservedCharsForPagination reserves space for pagination info like "(1/3)"
+	ReservedCharsForPagination = 20
+	// EffectiveMaxLength is the actual limit we use for message content
+	EffectiveMaxLength = TelegramMaxMessageLength - ReservedCharsForPagination
 )
 
 type Message struct {
@@ -66,6 +76,65 @@ func (message *Message) Translate(lang string) {
 	if err == nil {
 		message.Author = translation
 	}
+}
+
+// splitLongMessage splits a long message into multiple parts that fit within Telegram's limits
+func splitLongMessage(text string) []string {
+	if utf8.RuneCountInString(text) <= EffectiveMaxLength {
+		return []string{text}
+	}
+
+	var parts []string
+	remaining := text
+
+	for len(remaining) > 0 {
+		if utf8.RuneCountInString(remaining) <= EffectiveMaxLength {
+			parts = append(parts, remaining)
+			break
+		}
+
+		// Find a good split point (try to split at word boundaries)
+		splitPoint := EffectiveMaxLength
+
+		// Convert to runes for proper UTF-8 handling
+		runes := []rune(remaining)
+		if len(runes) > EffectiveMaxLength {
+			// Look for a space or newline near the split point
+			for i := EffectiveMaxLength - 1; i > EffectiveMaxLength/2; i-- {
+				if runes[i] == ' ' || runes[i] == '\n' {
+					splitPoint = i
+					break
+				}
+			}
+
+			// Check if we're in the middle of an HTML tag
+			beforeSplit := string(runes[:splitPoint])
+			if strings.Count(beforeSplit, "<") > strings.Count(beforeSplit, ">") {
+				// We're inside an HTML tag, find the end of the tag
+				for i := splitPoint; i < len(runes) && i < EffectiveMaxLength; i++ {
+					if runes[i] == '>' {
+						splitPoint = i + 1
+						break
+					}
+				}
+			}
+		}
+
+		if splitPoint >= len(runes) {
+			splitPoint = len(runes)
+		}
+
+		part := string(runes[:splitPoint])
+		parts = append(parts, part)
+
+		if splitPoint < len(runes) {
+			remaining = string(runes[splitPoint:])
+		} else {
+			break
+		}
+	}
+
+	return parts
 }
 
 func (message *Message) Send(bot *tgbotapi.BotAPI, telegramId int64) error {
@@ -158,10 +227,24 @@ func (message *Message) Send(bot *tgbotapi.BotAPI, telegramId int64) error {
 
 	msg.Text += "\n_______________________________"
 
-	// Send text message
-	_, err := bot.Send(msg)
-	if err != nil {
-		return err
+	// Split message if it's too long
+	messageParts := splitLongMessage(msg.Text)
+
+	// Send message parts
+	for i, part := range messageParts {
+		partMsg := tgbotapi.NewMessage(telegramId, part)
+		partMsg.ParseMode = tgbotapi.ModeHTML
+
+		// Add pagination info if there are multiple parts
+		if len(messageParts) > 1 {
+			paginationInfo := fmt.Sprintf("\n\n📄 Part %d/%d", i+1, len(messageParts))
+			partMsg.Text += paginationInfo
+		}
+
+		_, err := bot.Send(partMsg)
+		if err != nil {
+			return fmt.Errorf("failed to send message part %d/%d: %w", i+1, len(messageParts), err)
+		}
 	}
 
 	// Send photo group if any
@@ -170,7 +253,7 @@ func (message *Message) Send(bot *tgbotapi.BotAPI, telegramId int64) error {
 			ChatID: telegramId,
 			Media:  photos,
 		}
-		_, err = bot.SendMediaGroup(mediaGroup)
+		_, err := bot.SendMediaGroup(mediaGroup)
 		if err != nil {
 			fmt.Printf("Error sending photo group: %v\n", err)
 		}
@@ -182,7 +265,7 @@ func (message *Message) Send(bot *tgbotapi.BotAPI, telegramId int64) error {
 			ChatID: telegramId,
 			Media:  videos,
 		}
-		_, err = bot.SendMediaGroup(mediaGroup)
+		_, err := bot.SendMediaGroup(mediaGroup)
 		if err != nil {
 			fmt.Printf("Error sending video group: %v\n", err)
 		}
@@ -191,7 +274,7 @@ func (message *Message) Send(bot *tgbotapi.BotAPI, telegramId int64) error {
 	// Send documents separately if any
 	for _, doc := range documents {
 		docMsg := tgbotapi.NewDocument(telegramId, doc)
-		_, err = bot.Send(docMsg)
+		_, err := bot.Send(docMsg)
 		if err != nil {
 			logger.ErrorWithError("Error sending document", err,
 				zap.String("document_name", doc.Name),
