@@ -42,7 +42,24 @@ export class SessionManager {
       logger.debug('Creating browser context without proxy');
     }
 
-    return await this.browser.newContext(contextOptions);
+    const context = await this.browser.newContext(contextOptions);
+
+    // Block images and CSS to speed up page loading, keep JS for functionality
+    await context.route('**/*', (route) => {
+      const resourceType = route.request().resourceType();
+      if (resourceType === 'image') {
+        logger.debug('Blocking resource request', {
+          type: resourceType,
+          url: route.request().url()
+        });
+        route.abort();
+      } else {
+        route.continue();
+      }
+    });
+
+    logger.debug('Browser context created with image and CSS blocking enabled');
+    return context;
   }
 
   private async ensureSessionsDir(): Promise<void> {
