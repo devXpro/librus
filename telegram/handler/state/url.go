@@ -58,9 +58,6 @@ func (h *URLHandler) Handle(ctx *router.Context) error {
 		return ctx.SendMessage(localization.MsgServiceError)
 	}
 
-	// Set librus login
-	message.LibrusLogin = ctx.User.LibrusLogin
-
 	// Apply user's language preference
 	if ctx.User.Language != "" {
 		message.Translate(ctx.User.Language)

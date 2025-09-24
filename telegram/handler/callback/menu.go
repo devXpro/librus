@@ -87,13 +87,8 @@ func (h *MenuHandler) handleCheckMessages(ctx *router.Context) error {
 		return ctx.EditMessageWithKeyboard(localization.MsgNoNewMessages, backKeyboard)
 	}
 
-	// Add librus login to messages
-	for i := range allMsgs {
-		allMsgs[i].LibrusLogin = ctx.User.LibrusLogin
-	}
-
 	// Add to database (only new ones will be added)
-	allMsgs, err = mongo.AddMessagesToDatabase(allMsgs, ctx.User.LibrusLogin)
+	err = mongo.AddMessagesToDatabase(allMsgs)
 	if err != nil {
 		logger.ErrorWithError("Error adding messages to database", err,
 			zap.String("librus_login", ctx.User.LibrusLogin),
@@ -109,8 +104,8 @@ func (h *MenuHandler) handleCheckMessages(ctx *router.Context) error {
 
 	// Send messages
 	for _, message := range allMsgs {
-		// Check if message was already sent to this user (using type-aware function)
-		if mongo.IsMessageSentToUserByType(ctx.User.Id, message.Id, message.Type) {
+		// Check if message was already sent to this user
+		if mongo.IsMessageSentToUser(ctx.User.Id, message.Id) {
 			continue
 		}
 
@@ -130,8 +125,8 @@ func (h *MenuHandler) handleCheckMessages(ctx *router.Context) error {
 			continue
 		}
 
-		// Mark message as sent (using type-aware function)
-		err = mongo.MarkMessageAsSentByType(ctx.User.Id, message.Id, message.Type)
+		// Mark message as sent
+		err = mongo.MarkMessageAsSent(ctx.User.Id, message.Id)
 		if err != nil {
 			logger.ErrorWithError("Error marking message as sent", err,
 				zap.String("user_id", ctx.User.Id),

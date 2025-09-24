@@ -42,7 +42,6 @@ type Message struct {
 	Title          string      `bson:"title"`                     // Message title
 	Content        string      `bson:"content"`                   // Message content
 	Date           time.Time   `bson:"date"`                      // Message date
-	LibrusLogin    string      `bson:"librus_login"`              // Reference to LibrusAccount._id
 	AttachmentsDir string      `bson:"attachments_dir,omitempty"` // Path to directory with attachments
 }
 

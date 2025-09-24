@@ -4,7 +4,6 @@ import (
 	"sort"
 	"time"
 
-	"librus/model"
 	"librus/mongo"
 	"librus/pkg/config"
 	"librus/pkg/grpc_client"
@@ -67,13 +66,11 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 				zap.String("login", account.Login),
 				zap.Int("total_count", len(allMsgs)),
 			)
-			allMsgs = addLibrusLoginToMessages(allMsgs, account.Login)
-
 			logger.Debug("Adding messages to database",
 				zap.String("login", account.Login),
 				zap.Int("messages_count", len(allMsgs)),
 			)
-			allMsgs, err = mongo.AddMessagesToDatabase(allMsgs, account.Login)
+			err = mongo.AddMessagesToDatabase(allMsgs)
 			if err != nil {
 				logger.ErrorWithError("Failed to add messages to database", err,
 					zap.String("login", account.Login),
@@ -82,7 +79,7 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 			}
 			logger.Debug("Messages added to database",
 				zap.String("login", account.Login),
-				zap.Int("new_messages_count", len(allMsgs)),
+				zap.Int("messages_count", len(allMsgs)),
 			)
 
 			sort.Slice(allMsgs, func(i, j int) bool {
@@ -111,8 +108,8 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 			)
 			for _, message := range allMsgs {
 				for _, telegramUser := range telegramUsers {
-					// Check if message was already sent to this user (using type-aware function)
-					if mongo.IsMessageSentToUserByType(telegramUser.Id, message.Id, message.Type) {
+					// Check if message was already sent to this user
+					if mongo.IsMessageSentToUser(telegramUser.Id, message.Id) {
 						logger.Debug("Message already sent to user, skipping",
 							zap.String("user_id", telegramUser.Id),
 							zap.String("message_id", message.Id),
@@ -144,8 +141,8 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 						continue
 					}
 
-					// Mark message as sent (using type-aware function)
-					err = mongo.MarkMessageAsSentByType(telegramUser.Id, message.Id, message.Type)
+					// Mark message as sent
+					err = mongo.MarkMessageAsSent(telegramUser.Id, message.Id)
 					if err != nil {
 						logger.ErrorWithError("Error marking message as sent", err,
 							zap.String("user_id", telegramUser.Id),
@@ -167,13 +164,4 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 		}
 		logger.Info("Finished processing all accounts, waiting for next interval")
 	}
-}
-
-func addLibrusLoginToMessages(msgs []model.Message, login string) []model.Message {
-	var result []model.Message
-	for _, msg := range msgs {
-		msg.LibrusLogin = login
-		result = append(result, msg)
-	}
-	return result
 }

@@ -32,20 +32,11 @@ type TelegramUser struct {
 	LastActiveAt time.Time `bson:"last_active_at"` // Last interaction time
 }
 
-// UserMessageStatus tracks which messages were sent to which users
-type UserMessageStatus struct {
+// UserMessageDelivery tracks which messages were sent to which users
+// Works for all message types: regular messages, notifications, and news
+type UserMessageDelivery struct {
 	Id             string    `bson:"_id"`              // Auto-generated ID
 	TelegramUserID string    `bson:"telegram_user_id"` // Reference to TelegramUser._id
 	MessageID      string    `bson:"message_id"`       // Reference to Message._id
 	SentAt         time.Time `bson:"sent_at"`          // When message was sent
-}
-
-// UserNewsStatus tracks which news were sent to which users
-// This is separate from UserMessageStatus to handle news properly
-// since news have the same ID for all users in the same school
-type UserNewsStatus struct {
-	Id             string    `bson:"_id"`              // Auto-generated ID
-	TelegramUserID string    `bson:"telegram_user_id"` // Reference to TelegramUser._id
-	NewsID         string    `bson:"news_id"`          // Reference to Message._id (for news only)
-	SentAt         time.Time `bson:"sent_at"`          // When news was sent
 }

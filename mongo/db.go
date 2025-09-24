@@ -192,34 +192,36 @@ func GetLibrusAccountCollection() *mongo.Collection {
 	return client.Db.Collection("librus_account")
 }
 
-func AddMessagesToDatabase(messages []model.Message, librusLogin string) ([]model.Message, error) {
+func AddMessagesToDatabase(messages []model.Message) error {
+	if len(messages) == 0 {
+		return nil
+	}
+
 	collection := client.Db.Collection("message")
 
-	// Find existing messages by ID (regardless of librus_login since _id must be unique)
+	// Find existing messages by ID
 	existingMessages := make(map[string]bool)
 	cursor, err := collection.Find(
 		context.Background(),
 		bson.M{"_id": bson.M{"$in": getIds(messages)}},
 	)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer cursor.Close(context.Background())
 	for cursor.Next(context.Background()) {
 		var m model.Message
 		err = cursor.Decode(&m)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		existingMessages[m.Id] = true
 	}
 
-	// Insert new messages using bulk.Write
-	var newMessages []model.Message
+	// Insert only new messages using bulk.Write
 	var bulkOps []mongo.WriteModel
 	for _, m := range messages {
 		if _, ok := existingMessages[m.Id]; !ok {
-			newMessages = append(newMessages, m)
 			doc := bson.M{
 				"_id":             m.Id,
 				"type":            m.Type,
@@ -228,25 +230,20 @@ func AddMessagesToDatabase(messages []model.Message, librusLogin string) ([]mode
 				"title":           m.Title,
 				"content":         m.Content,
 				"date":            primitive.NewDateTimeFromTime(m.Date),
-				"librus_login":    m.LibrusLogin,
 				"attachments_dir": m.AttachmentsDir,
 			}
 			bulkOps = append(bulkOps, mongo.NewInsertOneModel().SetDocument(doc))
 		}
 	}
+
 	if len(bulkOps) > 0 {
 		_, err = collection.BulkWrite(context.Background(), bulkOps)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	// If no new messages were added, return empty list of messages
-	if len(newMessages) == 0 {
-		return newMessages, nil
-	}
-
-	return newMessages, nil
+	return nil
 }
 
 func getIds(messages []model.Message) []string {
@@ -259,7 +256,7 @@ func getIds(messages []model.Message) []string {
 
 // IsMessageSentToUser checks if a message was already sent to a telegram user
 func IsMessageSentToUser(telegramUserID, messageID string) bool {
-	collection := client.Db.Collection("user_message_status")
+	collection := client.Db.Collection("user_message_delivery")
 	filter := bson.M{
 		"telegram_user_id": telegramUserID,
 		"message_id":       messageID,
@@ -267,7 +264,7 @@ func IsMessageSentToUser(telegramUserID, messageID string) bool {
 
 	count, err := collection.CountDocuments(context.Background(), filter)
 	if err != nil {
-		logger.ErrorWithError("Error checking message status", err,
+		logger.ErrorWithError("Error checking message delivery status", err,
 			zap.String("telegram_user_id", telegramUserID),
 			zap.String("message_id", messageID),
 		)
@@ -279,7 +276,7 @@ func IsMessageSentToUser(telegramUserID, messageID string) bool {
 
 // MarkMessageAsSent marks a message as sent to a telegram user
 func MarkMessageAsSent(telegramUserID, messageID string) error {
-	collection := client.Db.Collection("user_message_status")
+	collection := client.Db.Collection("user_message_delivery")
 
 	status := bson.M{
 		"_id":              primitive.NewObjectID().Hex(),
@@ -290,62 +287,6 @@ func MarkMessageAsSent(telegramUserID, messageID string) error {
 
 	_, err := collection.InsertOne(context.Background(), status)
 	return err
-}
-
-// IsNewsSentToUser checks if a news was already sent to a telegram user
-// This is separate from IsMessageSentToUser to handle news properly
-func IsNewsSentToUser(telegramUserID, newsID string) bool {
-	collection := client.Db.Collection("user_news_status")
-	filter := bson.M{
-		"telegram_user_id": telegramUserID,
-		"news_id":          newsID,
-	}
-
-	count, err := collection.CountDocuments(context.Background(), filter)
-	if err != nil {
-		logger.ErrorWithError("Error checking news status", err,
-			zap.String("telegram_user_id", telegramUserID),
-			zap.String("news_id", newsID),
-		)
-		return false
-	}
-
-	return count > 0
-}
-
-// MarkNewsAsSent marks a news as sent to a telegram user
-func MarkNewsAsSent(telegramUserID, newsID string) error {
-	collection := client.Db.Collection("user_news_status")
-
-	status := bson.M{
-		"_id":              primitive.NewObjectID().Hex(),
-		"telegram_user_id": telegramUserID,
-		"news_id":          newsID,
-		"sent_at":          time.Now(),
-	}
-
-	_, err := collection.InsertOne(context.Background(), status)
-	return err
-}
-
-// IsMessageSentToUserByType checks if a message was sent to user based on message type
-// For news (notifications and news types), it uses the separate news status table
-// For regular messages, it uses the regular message status table
-func IsMessageSentToUserByType(telegramUserID, messageID string, messageType model.MessageType) bool {
-	if messageType == model.MsgTypeNotification || messageType == model.MsgTypeNews {
-		return IsNewsSentToUser(telegramUserID, messageID)
-	}
-	return IsMessageSentToUser(telegramUserID, messageID)
-}
-
-// MarkMessageAsSentByType marks a message as sent based on message type
-// For news (notifications and news types), it uses the separate news status table
-// For regular messages, it uses the regular message status table
-func MarkMessageAsSentByType(telegramUserID, messageID string, messageType model.MessageType) error {
-	if messageType == model.MsgTypeNotification || messageType == model.MsgTypeNews {
-		return MarkNewsAsSent(telegramUserID, messageID)
-	}
-	return MarkMessageAsSent(telegramUserID, messageID)
 }
 
 // DeleteTelegramUserByTelegramID deletes a telegram user and related data
@@ -363,15 +304,8 @@ func DeleteTelegramUserByTelegramID(telegramID int64) error {
 		return err
 	}
 
-	// Delete user message statuses
-	collection = client.Db.Collection("user_message_status")
-	_, err = collection.DeleteMany(context.Background(), bson.M{"telegram_user_id": telegramUser.Id})
-	if err != nil {
-		return err
-	}
-
-	// Delete user news statuses
-	collection = client.Db.Collection("user_news_status")
+	// Delete user message delivery records
+	collection = client.Db.Collection("user_message_delivery")
 	_, err = collection.DeleteMany(context.Background(), bson.M{"telegram_user_id": telegramUser.Id})
 	if err != nil {
 		return err
