@@ -48,7 +48,8 @@ type Message struct {
 
 func (message *Message) GenerateId() {
 	stringToHash := ""
-	if message.Type == MsgTypeNotification {
+	if message.Type == MsgTypeNotification || message.Type == MsgTypeNews {
+		// Both notifications and news use the same ID generation logic
 		stringToHash = message.Title + message.Content + message.Date.Format("2006-01-02")
 	} else if message.Type == MsgTypeMessage {
 		stringToHash = message.Link

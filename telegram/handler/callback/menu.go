@@ -109,8 +109,8 @@ func (h *MenuHandler) handleCheckMessages(ctx *router.Context) error {
 
 	// Send messages
 	for _, message := range allMsgs {
-		// Check if message was already sent to this user
-		if mongo.IsMessageSentToUser(ctx.User.Id, message.Id) {
+		// Check if message was already sent to this user (using type-aware function)
+		if mongo.IsMessageSentToUserByType(ctx.User.Id, message.Id, message.Type) {
 			continue
 		}
 
@@ -125,16 +125,18 @@ func (h *MenuHandler) handleCheckMessages(ctx *router.Context) error {
 			logger.ErrorWithError("Error sending message", err,
 				zap.Int64("chat_id", ctx.Update.ChatID),
 				zap.String("message_id", message.Id),
+				zap.String("message_type", string(message.Type)),
 			)
 			continue
 		}
 
-		// Mark message as sent
-		err = mongo.MarkMessageAsSent(ctx.User.Id, message.Id)
+		// Mark message as sent (using type-aware function)
+		err = mongo.MarkMessageAsSentByType(ctx.User.Id, message.Id, message.Type)
 		if err != nil {
 			logger.ErrorWithError("Error marking message as sent", err,
 				zap.String("user_id", ctx.User.Id),
 				zap.String("message_id", message.Id),
+				zap.String("message_type", string(message.Type)),
 			)
 		}
 

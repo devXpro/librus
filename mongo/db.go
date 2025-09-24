@@ -292,6 +292,62 @@ func MarkMessageAsSent(telegramUserID, messageID string) error {
 	return err
 }
 
+// IsNewsSentToUser checks if a news was already sent to a telegram user
+// This is separate from IsMessageSentToUser to handle news properly
+func IsNewsSentToUser(telegramUserID, newsID string) bool {
+	collection := client.Db.Collection("user_news_status")
+	filter := bson.M{
+		"telegram_user_id": telegramUserID,
+		"news_id":          newsID,
+	}
+
+	count, err := collection.CountDocuments(context.Background(), filter)
+	if err != nil {
+		logger.ErrorWithError("Error checking news status", err,
+			zap.String("telegram_user_id", telegramUserID),
+			zap.String("news_id", newsID),
+		)
+		return false
+	}
+
+	return count > 0
+}
+
+// MarkNewsAsSent marks a news as sent to a telegram user
+func MarkNewsAsSent(telegramUserID, newsID string) error {
+	collection := client.Db.Collection("user_news_status")
+
+	status := bson.M{
+		"_id":              primitive.NewObjectID().Hex(),
+		"telegram_user_id": telegramUserID,
+		"news_id":          newsID,
+		"sent_at":          time.Now(),
+	}
+
+	_, err := collection.InsertOne(context.Background(), status)
+	return err
+}
+
+// IsMessageSentToUserByType checks if a message was sent to user based on message type
+// For news (notifications and news types), it uses the separate news status table
+// For regular messages, it uses the regular message status table
+func IsMessageSentToUserByType(telegramUserID, messageID string, messageType model.MessageType) bool {
+	if messageType == model.MsgTypeNotification || messageType == model.MsgTypeNews {
+		return IsNewsSentToUser(telegramUserID, messageID)
+	}
+	return IsMessageSentToUser(telegramUserID, messageID)
+}
+
+// MarkMessageAsSentByType marks a message as sent based on message type
+// For news (notifications and news types), it uses the separate news status table
+// For regular messages, it uses the regular message status table
+func MarkMessageAsSentByType(telegramUserID, messageID string, messageType model.MessageType) error {
+	if messageType == model.MsgTypeNotification || messageType == model.MsgTypeNews {
+		return MarkNewsAsSent(telegramUserID, messageID)
+	}
+	return MarkMessageAsSent(telegramUserID, messageID)
+}
+
 // DeleteTelegramUserByTelegramID deletes a telegram user and related data
 func DeleteTelegramUserByTelegramID(telegramID int64) error {
 	// Find the telegram user first
@@ -309,6 +365,13 @@ func DeleteTelegramUserByTelegramID(telegramID int64) error {
 
 	// Delete user message statuses
 	collection = client.Db.Collection("user_message_status")
+	_, err = collection.DeleteMany(context.Background(), bson.M{"telegram_user_id": telegramUser.Id})
+	if err != nil {
+		return err
+	}
+
+	// Delete user news statuses
+	collection = client.Db.Collection("user_news_status")
 	_, err = collection.DeleteMany(context.Background(), bson.M{"telegram_user_id": telegramUser.Id})
 	if err != nil {
 		return err

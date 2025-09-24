@@ -111,11 +111,12 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 			)
 			for _, message := range allMsgs {
 				for _, telegramUser := range telegramUsers {
-					// Check if message was already sent to this user
-					if mongo.IsMessageSentToUser(telegramUser.Id, message.Id) {
+					// Check if message was already sent to this user (using type-aware function)
+					if mongo.IsMessageSentToUserByType(telegramUser.Id, message.Id, message.Type) {
 						logger.Debug("Message already sent to user, skipping",
 							zap.String("user_id", telegramUser.Id),
 							zap.String("message_id", message.Id),
+							zap.String("message_type", string(message.Type)),
 						)
 						continue
 					}
@@ -124,6 +125,7 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 						zap.String("user_id", telegramUser.Id),
 						zap.String("message_id", message.Id),
 						zap.String("message_title", message.Title),
+						zap.String("message_type", string(message.Type)),
 					)
 
 					// Translate message if user has language preference
@@ -142,12 +144,13 @@ func checkNewLibrusMessagesPeriodically(bot *tgbotapi.BotAPI) {
 						continue
 					}
 
-					// Mark message as sent
-					err = mongo.MarkMessageAsSent(telegramUser.Id, message.Id)
+					// Mark message as sent (using type-aware function)
+					err = mongo.MarkMessageAsSentByType(telegramUser.Id, message.Id, message.Type)
 					if err != nil {
 						logger.ErrorWithError("Error marking message as sent", err,
 							zap.String("user_id", telegramUser.Id),
 							zap.String("message_id", message.Id),
+							zap.String("message_type", string(message.Type)),
 						)
 					}
 				}
