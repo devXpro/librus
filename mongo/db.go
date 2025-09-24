@@ -182,16 +182,6 @@ func UpdateTelegramUserField(telegramID int64, field string, value interface{}) 
 	return err
 }
 
-// GetTelegramUserCollection returns the telegram user collection
-func GetTelegramUserCollection() *mongo.Collection {
-	return client.Db.Collection("telegram_user")
-}
-
-// GetLibrusAccountCollection returns the librus account collection
-func GetLibrusAccountCollection() *mongo.Collection {
-	return client.Db.Collection("librus_account")
-}
-
 func AddMessagesToDatabase(messages []model.Message) error {
 	if len(messages) == 0 {
 		return nil
